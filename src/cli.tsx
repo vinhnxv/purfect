@@ -1,5 +1,5 @@
 import {spawnSync} from 'node:child_process';
-import {readFileSync, writeFileSync} from 'node:fs';
+import {closeSync, openSync, readFileSync, writeFileSync} from 'node:fs';
 import {useEffect, useState} from 'react';
 import {Box, Text, render, useApp, useInput} from 'ink';
 import Spinner from 'ink-spinner';
@@ -164,7 +164,33 @@ function UsageLine({usage}: {usage: Usage}) {
 	);
 }
 
-await render(<App />).waitUntilExit();
+// The host CLI may launch us with its terminal still in raw output mode (Codex does),
+// so "\n" no longer returns the cursor to column 0. Restore output processing for our
+// run and put the host's exact settings back afterwards.
+function fixTerminalOutput(): () => void {
+	if (!process.stdout.isTTY) return () => {};
+	const stty = (...args: string[]) => {
+		const tty = openSync('/dev/tty', 'r');
+		try {
+			return spawnSync('stty', args, {stdio: [tty, 'pipe', 'ignore']}).stdout?.toString().trim();
+		} finally {
+			closeSync(tty);
+		}
+	};
+	const saved = stty('-g');
+	stty('opost', 'onlcr');
+	return () => {
+		if (saved) stty(saved);
+	};
+}
+
+const restoreTerminal = file ? fixTerminalOutput() : () => {};
+try {
+	// In editor mode we own the screen like any $EDITOR; standalone stays inline so output persists.
+	await render(<App />, {alternateScreen: Boolean(file)}).waitUntilExit();
+} finally {
+	restoreTerminal();
+}
 
 if (approved && file) {
 	writeFileSync(file, approved + '\n');
