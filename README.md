@@ -5,6 +5,7 @@ Claude Code / Codex CLI, with a short Vietnamese explanation of the key verbs an
 Review, edit, then approve.
 
 Rewriting runs through headless Claude Code (`claude -p`), so it uses your existing login.
+The model defaults to `haiku`; set `PURFECT_MODEL` (e.g. `sonnet`, `opus`) to override it.
 
 ## Usage
 

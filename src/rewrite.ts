@@ -38,9 +38,10 @@ Reply with JSON only, no code fence:
 export function rewrite(draft: string, signal: AbortSignal): Promise<Rewrite> {
 	return new Promise((resolve, reject) => {
 		// Headless Claude Code reuses the user's existing login; no API key needed.
+		const model = process.env.PURFECT_MODEL || 'haiku';
 		const child = spawn(
 			'claude',
-			['-p', '--system-prompt', SYSTEM_PROMPT, '--tools', '', '--no-session-persistence', '--setting-sources', ''],
+			['-p', '--model', model, '--system-prompt', SYSTEM_PROMPT, '--tools', '', '--no-session-persistence', '--setting-sources', ''],
 			{signal, stdio: ['pipe', 'pipe', 'pipe']},
 		);
 		let stdout = '';
