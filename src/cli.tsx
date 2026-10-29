@@ -4,10 +4,12 @@ import {useEffect, useState} from 'react';
 import {Box, Text, render, useApp, useInput} from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
-import {loadConfig, type Config} from './config.js';
+import {languageLabel, loadConfig, saveSetting, type Config, type SettingKey} from './config.js';
+import {COMMAND_NAMES, messages} from './i18n.js';
 import {rewrite, type Refine, type Rewrite, type Usage} from './rewrite.js';
+import {Settings} from './settings.js';
 
-type Stage = 'compose' | 'rewriting' | 'review' | 'edit' | 'history';
+type Stage = 'compose' | 'rewriting' | 'review' | 'edit' | 'history' | 'config';
 
 // One entry in the version history; label says how it came about (the instruction, or what was done).
 type Version = {result: Rewrite; label: string};
@@ -27,20 +29,11 @@ try {
 
 let approved: string | undefined;
 
-// Slash commands for the review chat box; the first letter works as a shortcut (/e = /edit).
-const COMMANDS = [
-	{name: 'approve', desc: 'Duyệt prompt này và đóng (Enter trống cũng vậy)'},
-	{name: 'edit', desc: 'Tự sửa tay prompt tiếng Anh'},
-	{name: 'improve', desc: 'Gợi ý cải thiện prompt: rõ hơn, chỗ thiếu để [trống?] cho bạn điền'},
-	{name: 'history', desc: 'Xem mọi phiên bản đã chỉnh, chọn một bản để làm tiếp'},
-	{name: 'undo', desc: 'Về phiên bản liền trước'},
-	{name: 'redo', desc: 'Rewrite lại từ bản nháp gốc (thành một phiên bản mới)'},
-	{name: 'back', desc: 'Quay lại sửa bản nháp'},
-	{name: 'quit', desc: 'Thoát, không đổi gì'},
-];
-
 function App() {
 	const {exit} = useApp();
+	// Session settings: /config changes them here and saves them to the config file.
+	const [cfg, setCfg] = useState(config);
+	const msgs = messages(cfg.displayLanguage);
 	const [stage, setStage] = useState<Stage>(initialDraft ? 'rewriting' : 'compose');
 	const [draft, setDraft] = useState(initialDraft);
 	// Every rewrite, refinement and manual edit adds a version; nothing is ever removed, and picking
@@ -80,14 +73,14 @@ function App() {
 		if (stage !== 'rewriting') return;
 		const controller = new AbortController();
 		const refine: Refine | undefined = refining && result ? {current: result.prompt, ...refining} : undefined;
-		rewrite(draft, config, controller.signal, refine).then(
+		rewrite(draft, cfg, controller.signal, refine).then(
 			r => {
 				if (refine?.improve && (r.prompt === refine.current || r.tips?.length === 0)) {
-					setNotice('Prompt đã khá rõ, không có gì cần cải thiện thêm');
+					setNotice(msgs.alreadyClear);
 				} else {
 					addVersion({
 						result: r,
-						label: refine?.improve ? 'Improve' : refine ? refine.instruction : versions.length > 0 ? 'Rewrite lại' : 'Rewrite ban đầu',
+						label: refine?.improve ? msgs.labels.improve : refine ? refine.instruction : versions.length > 0 ? msgs.labels.again : msgs.labels.first,
 					});
 				}
 				setError(undefined);
@@ -96,7 +89,7 @@ function App() {
 			(e: Error) => {
 				if (controller.signal.aborted) return;
 				// With an earlier version to fall back on, a failure is only a notice.
-				if (versions.length > 0) setNotice(`Không làm được, giữ bản hiện tại: ${e.message}`);
+				if (versions.length > 0) setNotice(msgs.kept(e.message));
 				else setError(e.message);
 				setStage('review');
 			},
@@ -107,9 +100,10 @@ function App() {
 	// Commands matching what is typed after "/", minus the ones that cannot run right now.
 	const available = (name: string) =>
 		name === 'undo' ? current > 0 : name === 'history' ? versions.length > 1 : name === 'approve' || name === 'edit' || name === 'improve' ? canUse : true;
+	const commands = COMMAND_NAMES.map(name => ({name, desc: msgs.commands[name]}));
 	const suggestions =
 		stage === 'review' && chat.startsWith('/') && !chat.includes(' ')
-			? COMMANDS.filter(c => c.name.startsWith(chat.slice(1).toLowerCase()) && available(c.name))
+			? commands.filter(c => c.name.startsWith(chat.slice(1).toLowerCase()) && available(c.name))
 			: [];
 	const selected = suggestions[Math.min(pick, suggestions.length - 1)];
 
@@ -142,18 +136,18 @@ function App() {
 				}
 			}
 		},
-		{isActive: stage !== 'compose'},
+		{isActive: stage !== 'compose' && stage !== 'config'},
 	);
 
 	const runCommand = (command: string) => {
 		setNotice(undefined);
-		if (!COMMANDS.some(c => c.name === command)) return setNotice(`Không có lệnh /${command}`);
-		if (!available(command)) return setNotice(`Lệnh /${command} chưa dùng được lúc này`);
+		if (!(COMMAND_NAMES as readonly string[]).includes(command)) return setNotice(msgs.unknownCommand(command));
+		if (!available(command)) return setNotice(msgs.unavailable(command));
 		if (command === 'approve') {
 			// Improve mode leaves "[...?]" placeholders; make approving them as-is a deliberate second step.
-			if (/\[[^\]\n]*\?\]/.test(result!.prompt) && warnedFor !== result!.prompt) {
+			if (/\[[^\]\n]*[?？]\]/.test(result!.prompt) && warnedFor !== result!.prompt) {
 				setWarnedFor(result!.prompt);
-				return setNotice('Còn chỗ trống [...?] chưa điền. Trả lời trong khung chat để điền, hoặc duyệt lần nữa để giữ nguyên');
+				return setNotice(msgs.placeholders);
 			}
 			approved = result!.prompt;
 			exit();
@@ -163,6 +157,8 @@ function App() {
 		} else if (command === 'edit') {
 			setEdited(result!.prompt);
 			setStage('edit');
+		} else if (command === 'config') {
+			setStage('config');
 		} else if (command === 'history') {
 			setHighlight(current);
 			setStage('history');
@@ -176,6 +172,15 @@ function App() {
 		} else {
 			exit();
 		}
+	};
+
+	const applySetting = (key: SettingKey, value: string): string | undefined => {
+		try {
+			setCfg(saveSetting(cfg, key, value));
+		} catch (e) {
+			return (e as Error).message;
+		}
+		return undefined;
 	};
 
 	// The chat box is always on in review: text refines the prompt, /commands act, empty Enter approves.
@@ -194,7 +199,7 @@ function App() {
 		<Box flexDirection="column" gap={1}>
 			{stage === 'compose' ? (
 				<Box flexDirection="column">
-					<Text bold>Prompt (tiếng Việt hoặc tiếng Anh) — Enter để rewrite, Ctrl+C để thoát</Text>
+					<Text bold>{msgs.composeTitle}</Text>
 					<Box>
 						<Text color="cyan">› </Text>
 						<TextInput value={draft} onChange={setDraft} onSubmit={value => value.trim() && startRewrite(true)} />
@@ -202,10 +207,10 @@ function App() {
 				</Box>
 			) : (
 				<Box flexDirection="column">
-					<Text dimColor>VI: {draft}</Text>
+					<Text dimColor>{msgs.draft}: {draft}</Text>
 					{versions.length > 1 && (
 						<Text dimColor wrap="truncate-end">
-							Phiên bản {current + 1}/{versions.length} · {versions[current]!.label}
+							{msgs.version(current + 1, versions.length, versions[current]!.label)}
 						</Text>
 					)}
 				</Box>
@@ -216,11 +221,11 @@ function App() {
 					<Text color="green">
 						<Spinner type="dots" />
 					</Text>{' '}
-					{refining?.improve ? 'Đang cải thiện prompt…' : refining ? 'Đang chỉnh lại prompt…' : 'Đang rewrite sang tiếng Anh…'} (Esc để huỷ)
+					{refining?.improve ? msgs.working.improve : refining ? msgs.working.refine : msgs.working.rewrite(languageLabel(cfg.targetLanguage))}
 				</Text>
 			)}
 
-			{stage === 'review' && error && <Text color="red">Lỗi: {error}</Text>}
+			{stage === 'review' && error && <Text color="red">{msgs.error(error)}</Text>}
 
 			{stage === 'review' && result && !error && (
 				<Box flexDirection="column" gap={1}>
@@ -230,8 +235,8 @@ function App() {
 					{result.explanation && (
 						<Box flexDirection="column">
 							<Text bold>Language tutor</Text>
-							{result.explanation.meaning && <Text>Nghĩa: {result.explanation.meaning}</Text>}
-							{result.explanation.structure && <Text>Cấu trúc: {result.explanation.structure}</Text>}
+							{result.explanation.meaning && <Text>{msgs.meaning}: {result.explanation.meaning}</Text>}
+							{result.explanation.structure && <Text>{msgs.structure}: {result.explanation.structure}</Text>}
 							{result.explanation.keywords.map(k => (
 								<Box key={k.original + k.term} flexDirection="column">
 									<Text>
@@ -248,7 +253,7 @@ function App() {
 								Prompt tutor
 							</Text>
 							{result.tips.length === 0 ? (
-								<Text dimColor>Prompt đã rõ ràng, agent có đủ thông tin để làm ✓</Text>
+								<Text dimColor>{msgs.promptClear}</Text>
 							) : (
 								result.tips.map(t => <Text key={t}>• {t}</Text>)
 							)}
@@ -265,11 +270,12 @@ function App() {
 				<Box flexDirection="column">
 					{canUse && (
 						<Text bold color="green">
-							⏎ Enter (ô trống) = duyệt prompt này
+							{msgs.approveHint}
 						</Text>
 					)}
 					<Text dimColor>
-						{canUse ? 'hoặc nhắn để chỉnh lại (VD: ngắn hơn, thêm yêu cầu viết test) · ' : ''}gõ / để xem lệnh
+						{canUse ? msgs.refineHint : ''}
+						{msgs.commandHint}
 					</Text>
 					<Box>
 						<Text color="cyan">› </Text>
@@ -290,7 +296,7 @@ function App() {
 									{c === selected ? '❯' : ' '} /{c.name.padEnd(8)} {c.desc}
 								</Text>
 							))}
-							<Text dimColor>  ↑↓ chọn · Tab điền · Enter chạy · Esc xoá</Text>
+							<Text dimColor>  {msgs.suggestKeys}</Text>
 						</Box>
 					)}
 				</Box>
@@ -299,11 +305,11 @@ function App() {
 			{stage === 'history' && (
 				<Box flexDirection="column" gap={1}>
 					<Box flexDirection="column">
-						<Text bold>Lịch sử phiên bản — ↑↓ chọn · Enter dùng bản này để làm tiếp · Esc huỷ</Text>
+						<Text bold>{msgs.historyTitle}</Text>
 						{versions.map((v, i) => (
 							<Text key={i} color={i === highlight ? 'cyan' : undefined} dimColor={i !== highlight} wrap="truncate-end">
 								{i === highlight ? '❯' : ' '} v{i + 1}
-								{i === current ? ' (đang dùng)' : ''} · {v.label}
+								{i === current ? msgs.inUse : ''} · {v.label}
 							</Text>
 						))}
 					</Box>
@@ -313,9 +319,11 @@ function App() {
 				</Box>
 			)}
 
+			{stage === 'config' && <Settings config={cfg} msgs={msgs} onSave={applySetting} onClose={() => setStage('review')} />}
+
 			{stage === 'edit' && (
 				<Box flexDirection="column">
-					<Text bold>Chỉnh sửa — Enter để lưu, Esc để huỷ</Text>
+					<Text bold>{msgs.editTitle}</Text>
 					<Box>
 						<Text color="cyan">› </Text>
 						<TextInput
@@ -323,7 +331,7 @@ function App() {
 							onChange={setEdited}
 							onSubmit={value => {
 								if (!value.trim()) return;
-								addVersion({result: {prompt: value.trim()}, label: 'Sửa tay'});
+								addVersion({result: {prompt: value.trim()}, label: msgs.labels.manual});
 								setStage('review');
 							}}
 						/>

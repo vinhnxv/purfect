@@ -1,10 +1,44 @@
 import {spawnSync} from 'node:child_process';
-import {readFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {homedir} from 'node:os';
-import {basename, join} from 'node:path';
+import {basename, dirname, join} from 'node:path';
 
 export const BACKENDS = ['claude', 'codex', 'openai'] as const;
 export type Backend = (typeof BACKENDS)[number];
+
+// Languages for the rewrite target. `name` is what the model is told; `native` is what the picker shows.
+// The interface and the explanations are limited to DISPLAY_CODES, the languages with a message bundle.
+export const LANGUAGES = [
+	{code: 'en', name: 'English', native: 'English'},
+	{code: 'vi', name: 'Vietnamese', native: 'Tiếng Việt'},
+	{code: 'zh', name: 'Chinese (Simplified)', native: '简体中文'},
+	{code: 'ja', name: 'Japanese', native: '日本語'},
+	{code: 'ko', name: 'Korean', native: '한국어'},
+	{code: 'fr', name: 'French', native: 'Français'},
+	{code: 'de', name: 'German', native: 'Deutsch'},
+	{code: 'es', name: 'Spanish', native: 'Español'},
+	{code: 'pt', name: 'Portuguese', native: 'Português'},
+	{code: 'it', name: 'Italian', native: 'Italiano'},
+	{code: 'ru', name: 'Russian', native: 'Русский'},
+	{code: 'id', name: 'Indonesian', native: 'Bahasa Indonesia'},
+	{code: 'th', name: 'Thai', native: 'ไทย'},
+	{code: 'hi', name: 'Hindi', native: 'हिन्दी'},
+	{code: 'ar', name: 'Arabic', native: 'العربية'},
+	{code: 'tr', name: 'Turkish', native: 'Türkçe'},
+] as const;
+export type LanguageCode = (typeof LANGUAGES)[number]['code'];
+
+export const DISPLAY_CODES = ['en', 'vi', 'fr', 'de', 'it', 'es', 'pt', 'ja', 'zh', 'ko'] as const;
+export type DisplayCode = (typeof DISPLAY_CODES)[number];
+export const DISPLAY_LANGUAGES = LANGUAGES.filter(l => (DISPLAY_CODES as readonly string[]).includes(l.code));
+
+const LANGUAGE_CODES = LANGUAGES.map(l => l.code);
+
+export const languageName = (code: LanguageCode) => LANGUAGES.find(l => l.code === code)!.name;
+export const languageLabel = (code: LanguageCode) => {
+	const language = LANGUAGES.find(l => l.code === code)!;
+	return `${language.native} (${code})`;
+};
 
 // Valid values for `claude --effort`. Codex effort levels vary per model, so Codex validates its own.
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -12,33 +46,57 @@ const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 // CLIs that can launch purfect as their editor; each maps to the backend of the same name.
 const HOST_CLIS: readonly Backend[] = ['claude', 'codex'];
 
+// Settings editable in the app (and the environment variable that overrides each).
+export const ENV_NAMES = {
+	targetLanguage: 'PURFECT_TARGET_LANG',
+	displayLanguage: 'PURFECT_DISPLAY_LANG',
+	backend: 'PURFECT_BACKEND',
+	model: 'PURFECT_MODEL',
+	effort: 'PURFECT_EFFORT',
+} as const;
+export type SettingKey = keyof typeof ENV_NAMES;
+
 // Resolved settings for the active backend. Unset effort falls back to the backend's own default.
 // baseUrl and apiKey apply to the openai backend only.
-export type Config = {backend: Backend; model?: string; effort?: string; baseUrl?: string; apiKey?: string};
+export type Config = {
+	backend: Backend;
+	targetLanguage: LanguageCode;
+	displayLanguage: DisplayCode;
+	model?: string;
+	effort?: string;
+	baseUrl?: string;
+	apiKey?: string;
+};
 
 const SETTING_KEYS = ['model', 'effort', 'baseUrl', 'apiKey'] as const;
 type BackendSettings = Partial<Record<(typeof SETTING_KEYS)[number], string>>;
-type ConfigFile = {backend?: Backend} & Partial<Record<Backend, BackendSettings>>;
+type ConfigFile = {backend?: Backend; targetLanguage?: LanguageCode; displayLanguage?: DisplayCode} & Partial<Record<Backend, BackendSettings>>;
 
 const DEFAULT_BACKEND: Backend = 'claude';
+const DEFAULT_TARGET_LANGUAGE: LanguageCode = 'en';
+const DEFAULT_DISPLAY_LANGUAGE: DisplayCode = 'en';
 const DEFAULT_MODELS: Record<Backend, string> = {claude: 'haiku', codex: 'gpt-6-luna', openai: 'gpt-6-luna'};
 const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
 export const CONFIG_PATH = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'purfect', 'config.json');
 
 // Precedence: environment (PURFECT_*) > config file > defaults.
-// The default backend is the CLI that launched us (Ctrl+G), falling back to claude.
+// The default backend is the CLI that launched us (Ctrl+G), falling back to claude; an explicit
+// `chosenBackend` (picked inside the app) beats all of them.
 // Per-host overrides go through env: the `env` block of .claude/settings.json for Claude Code,
 // or the command that launches Codex.
-export function loadConfig(): Config {
+export function loadConfig(chosenBackend?: Backend): Config {
 	const file = readConfigFile();
-	const backend = check(process.env.PURFECT_BACKEND || undefined, BACKENDS, 'PURFECT_BACKEND') ?? file.backend ?? detectHostCli() ?? DEFAULT_BACKEND;
+	const backend =
+		chosenBackend ?? check(process.env[ENV_NAMES.backend] || undefined, BACKENDS, ENV_NAMES.backend) ?? file.backend ?? detectHostCli() ?? DEFAULT_BACKEND;
 	const settings = file[backend] ?? {};
-	const effort = process.env.PURFECT_EFFORT || settings.effort;
-	if (backend === 'claude') check(effort, CLAUDE_EFFORTS, process.env.PURFECT_EFFORT ? 'PURFECT_EFFORT' : `"claude.effort" in ${CONFIG_PATH}`);
+	const effort = process.env[ENV_NAMES.effort] || settings.effort;
+	if (backend === 'claude') check(effort, CLAUDE_EFFORTS, process.env[ENV_NAMES.effort] ? ENV_NAMES.effort : `"claude.effort" in ${CONFIG_PATH}`);
 	return {
 		backend,
-		model: process.env.PURFECT_MODEL || settings.model || DEFAULT_MODELS[backend],
+		targetLanguage: parseLanguage(process.env[ENV_NAMES.targetLanguage], ENV_NAMES.targetLanguage) ?? file.targetLanguage ?? DEFAULT_TARGET_LANGUAGE,
+		displayLanguage: (parseLanguage(process.env[ENV_NAMES.displayLanguage], ENV_NAMES.displayLanguage, DISPLAY_CODES) as DisplayCode | undefined) ?? file.displayLanguage ?? DEFAULT_DISPLAY_LANGUAGE,
+		model: process.env[ENV_NAMES.model] || settings.model || DEFAULT_MODELS[backend],
 		effort,
 		...(backend === 'openai' && {
 			baseUrl: process.env.PURFECT_BASE_URL || settings.baseUrl || DEFAULT_OPENAI_BASE_URL,
@@ -47,7 +105,37 @@ export function loadConfig(): Config {
 	};
 }
 
-function readConfigFile(): ConfigFile {
+// Saves one setting to the config file and returns the session config with it applied. The session
+// takes the value as chosen even when an environment variable would override it on the next launch.
+// Everything else in the file (API keys, other backends) is left as it was.
+export function saveSetting(current: Config, key: SettingKey, value: string): Config {
+	if (key === 'targetLanguage') {
+		const language = parseLanguage(value, key)!;
+		updateConfigFile(data => void (data[key] = language));
+		return {...current, targetLanguage: language};
+	}
+	if (key === 'displayLanguage') {
+		const language = parseLanguage(value, key, DISPLAY_CODES) as DisplayCode;
+		updateConfigFile(data => void (data[key] = language));
+		return {...current, displayLanguage: language};
+	}
+	if (key === 'backend') {
+		const backend = check(value, BACKENDS, key)!;
+		updateConfigFile(data => void (data.backend = backend));
+		return {...loadConfig(backend), targetLanguage: current.targetLanguage, displayLanguage: current.displayLanguage};
+	}
+	// model and effort belong to the active backend; blank clears the override.
+	const setting = value.trim() || undefined;
+	if (key === 'effort' && current.backend === 'claude') check(setting, CLAUDE_EFFORTS, key);
+	updateConfigFile(data => {
+		const section = (isObject(data[current.backend]) ? data[current.backend] : (data[current.backend] = {})) as Record<string, unknown>;
+		if (setting) section[key] = setting;
+		else delete section[key];
+	});
+	return {...current, [key]: setting ?? (key === 'model' ? DEFAULT_MODELS[current.backend] : undefined)};
+}
+
+function readRawConfig(): Record<string, unknown> {
 	let text: string;
 	try {
 		text = readFileSync(CONFIG_PATH, 'utf8');
@@ -62,7 +150,24 @@ function readConfigFile(): ConfigFile {
 		throw new Error(`Invalid JSON in ${CONFIG_PATH}: ${(e as Error).message}`);
 	}
 	if (!isObject(data)) throw new Error(`${CONFIG_PATH} must contain a JSON object`);
-	const result: ConfigFile = {backend: check(data.backend, BACKENDS, `"backend" in ${CONFIG_PATH}`)};
+	return data;
+}
+
+// A new file may hold an API key, so it starts private; an existing file keeps its permissions.
+function updateConfigFile(mutate: (data: Record<string, unknown>) => void): void {
+	const data = readRawConfig();
+	mutate(data);
+	mkdirSync(dirname(CONFIG_PATH), {recursive: true});
+	writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2) + '\n', {mode: 0o600});
+}
+
+function readConfigFile(): ConfigFile {
+	const data = readRawConfig();
+	const result: ConfigFile = {
+		backend: check(data.backend, BACKENDS, `"backend" in ${CONFIG_PATH}`),
+		targetLanguage: parseLanguage(data.targetLanguage, `"targetLanguage" in ${CONFIG_PATH}`),
+		displayLanguage: parseLanguage(data.displayLanguage, `"displayLanguage" in ${CONFIG_PATH}`, DISPLAY_CODES) as DisplayCode | undefined,
+	};
 	for (const backend of BACKENDS) {
 		const section = data[backend];
 		if (section === undefined) continue;
@@ -105,4 +210,13 @@ function check<T extends string>(value: unknown, allowed: readonly T[], source: 
 	if (value === undefined) return undefined;
 	if (!allowed.includes(value as T)) throw new Error(`${source} must be one of ${allowed.join(', ')}`);
 	return value as T;
+}
+
+// Accepts a code ("ja") or a name ("Japanese", "日本語"), case-insensitive; blank counts as unset.
+function parseLanguage(value: unknown, source: string, allowed: readonly LanguageCode[] = LANGUAGE_CODES): LanguageCode | undefined {
+	if (value === undefined || value === '') return undefined;
+	const wanted = typeof value === 'string' ? value.trim().toLowerCase() : '';
+	const found = LANGUAGES.find(l => allowed.includes(l.code) && [l.code, l.name, l.native].some(name => name.toLowerCase() === wanted));
+	if (!found) throw new Error(`${source} must be one of ${allowed.join(', ')}`);
+	return found.code;
 }

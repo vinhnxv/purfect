@@ -1,13 +1,14 @@
 # purfect
 
-Write a prompt in Vietnamese (or rough English), get it rewritten into clear English for
-Claude Code / Codex CLI. Two tutors sit under the result:
+Write a prompt in any language (or rough English), get it rewritten into clear English, or any
+other target language, for Claude Code / Codex CLI. Two tutors sit under the result, in your
+display language:
 
-- **Language tutor**: a short Vietnamese explanation of the key verbs and phrases, including
-  mistakes in your English.
+- **Language tutor**: a short explanation of the key verbs and phrases, including mistakes in
+  your English (or whichever target language you practice).
 - **Prompt tutor**: tips on whether the prompt is clear enough for an agent to act on (target,
-  expected result and how to check it, scope, one task at a time) with an English phrase you can
-  add. A clear prompt gets no tips.
+  expected result and how to check it, scope, one task at a time) with a phrase you can add.
+  A clear prompt gets no tips.
 
 Review, refine in the chat box, then approve.
 
@@ -52,11 +53,20 @@ Optional file `~/.config/purfect/config.json` (or `$XDG_CONFIG_HOME/purfect/conf
 
 | Setting                  | Env var           | Default                                    |
 | ------------------------ | ----------------- | ------------------------------------------ |
+| `targetLanguage`         | `PURFECT_TARGET_LANG`  | `en`                                   |
+| `displayLanguage`        | `PURFECT_DISPLAY_LANG` | `en`                                   |
 | `backend`                | `PURFECT_BACKEND`  | the CLI that launched purfect, else `claude` |
 | `<backend>.model`        | `PURFECT_MODEL`    | `haiku` for claude, `gpt-6-luna` for codex and openai |
 | `<backend>.effort`       | `PURFECT_EFFORT`   | the backend's default                      |
 | `openai.baseUrl`         | `PURFECT_BASE_URL` | `https://api.openai.com/v1`                |
 | `openai.apiKey`          | `PURFECT_API_KEY`  | `OPENAI_API_KEY`                           |
+
+`targetLanguage` is the language prompts are rewritten into: `en`, `vi`, `zh`, `ja`, `ko`, `fr`,
+`de`, `es`, `pt`, `it`, `ru`, `id`, `th`, `hi`, `ar` or `tr` (a name such as `Japanese` works
+too). `displayLanguage` is the language of the interface and of both tutors' explanations; it is
+limited to the languages with a translated interface: `en`, `vi`, `fr`, `de`, `it`, `es`, `pt`,
+`ja`, `zh`, `ko`. You can change all of these without editing the file: type `/config` in the
+review screen. Changes are saved to the file and apply at once.
 
 Env vars win over the file and apply to the active backend. Without `backend`, purfect uses the
 CLI it was launched from (Claude Code → claude, Codex → codex). Set `backend` or `PURFECT_BACKEND`
@@ -87,9 +97,10 @@ verify). Its tips are advice only: they are never applied to the rewrite on thei
 
 The rewrite stays faithful to the draft: no added or dropped meaning (time cues such as
 "lúc nãy" become "earlier"), vague references (this, that, above, the other file) stay vague,
-and verbs follow the intent ("sửa lại" is "fix", "sửa lại lần nữa" is "fix again"). Identifiers,
-file names and code are kept as written. English mistakes in the draft are listed in the
-explanation with why the fix is right.
+and verbs follow the intent. Identifiers, file names and code are kept as written. Mistakes in
+the draft's target-language parts are listed in the explanation with why the fix is right. For
+Vietnamese drafts rewritten into English there are extra verb rules ("sửa lại" is "fix",
+"sửa lại lần nữa" is "fix again").
 
 ## Review screen
 
@@ -104,12 +115,13 @@ The chat box under the result is always on:
 | Command    | Does                                                  |
 | ---------- | ----------------------------------------------------- |
 | `/approve` | Approve this prompt and close                         |
-| `/edit`    | Edit the English prompt by hand                       |
+| `/edit`    | Edit the rewritten prompt by hand                     |
 | `/improve` | Make the prompt clearer; gaps become `[...?]` to fill |
 | `/history` | List every version, pick one to continue from         |
 | `/undo`    | Go to the previous version                            |
 | `/redo`    | Rewrite again from the original draft (a new version) |
 | `/back`    | Go back and change the draft                          |
+| `/config`  | Change languages, backend, model, effort (saved)      |
 | `/quit`    | Quit without changing anything                        |
 
 Versions are append-only: every rewrite, refinement and manual edit adds one, and nothing is
