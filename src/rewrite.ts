@@ -1,4 +1,7 @@
 import {spawn} from 'node:child_process';
+import {writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import type {Config} from './config.js';
 
 export type Keyword = {original: string; term: string; meaning: string; why: string};
@@ -8,7 +11,8 @@ export type Usage = {
 	inputTokens: number;
 	outputTokens: number;
 	thinkingTokens: number;
-	costUsd: number;
+	// Only Claude reports a (list-price) cost; Codex reports tokens only.
+	costUsd?: number;
 	durationMs: number;
 };
 export type Rewrite = {prompt: string; explanation?: Explanation; usage?: Usage};
@@ -44,34 +48,80 @@ Reply with JSON only, no code fence:
  "explanation": {"meaning": "<Vietnamese>", "structure": "<Vietnamese>",
    "keywords": [{"original": "<user's words>", "term": "<English>", "meaning": "<Vietnamese>", "why": "<Vietnamese>"}]}}`;
 
-export function rewrite(draft: string, {model, effort}: Config, signal: AbortSignal): Promise<Rewrite> {
+export function rewrite(draft: string, config: Config, signal: AbortSignal): Promise<Rewrite> {
+	return config.backend === 'codex' ? rewriteWithCodex(draft, config, signal) : rewriteWithClaude(draft, config, signal);
+}
+
+// Headless Claude Code reuses the user's existing login; no API key needed.
+async function rewriteWithClaude(draft: string, {model, effort}: Config, signal: AbortSignal): Promise<Rewrite> {
+	const args = ['-p', '--output-format', 'json', '--system-prompt', SYSTEM_PROMPT, '--tools', '', '--no-session-persistence', '--setting-sources', ''];
+	if (model) args.push('--model', model);
+	if (effort) args.push('--effort', effort);
+	return parseClaudeEnvelope(await run('claude', args, draft, signal));
+}
+
+// `codex exec` reuses the user's Codex login and provider config. It runs in the temp dir so
+// the host project's AGENTS.md is not loaded, in a read-only sandbox, without saving the session.
+async function rewriteWithCodex(draft: string, {model, effort}: Config, signal: AbortSignal): Promise<Rewrite> {
+	const schemaPath = join(tmpdir(), 'purfect-rewrite-schema.json');
+	writeFileSync(schemaPath, JSON.stringify(OUTPUT_SCHEMA));
+	// JSON string literals are valid TOML basic strings, which is how -c parses values.
+	const args = ['exec', '--ephemeral', '--skip-git-repo-check', '-s', 'read-only', '-C', tmpdir(), '--json',
+		'--output-schema', schemaPath, '-c', `developer_instructions=${JSON.stringify(SYSTEM_PROMPT)}`];
+	if (model) args.push('-m', model);
+	if (effort) args.push('-c', `model_reasoning_effort=${JSON.stringify(effort)}`);
+	args.push('-');
+	const started = Date.now();
+	const stdout = await run('codex', args, draft, signal);
+	return parseCodexEvents(stdout, model ?? 'codex default', Date.now() - started);
+}
+
+// Strict structured-output schema for Codex: every property required, no extras.
+const OUTPUT_SCHEMA = {
+	type: 'object',
+	additionalProperties: false,
+	required: ['prompt', 'explanation'],
+	properties: {
+		prompt: {type: 'string'},
+		explanation: {
+			type: 'object',
+			additionalProperties: false,
+			required: ['meaning', 'structure', 'keywords'],
+			properties: {
+				meaning: {type: 'string'},
+				structure: {type: 'string'},
+				keywords: {
+					type: 'array',
+					items: {
+						type: 'object',
+						additionalProperties: false,
+						required: ['original', 'term', 'meaning', 'why'],
+						properties: {original: {type: 'string'}, term: {type: 'string'}, meaning: {type: 'string'}, why: {type: 'string'}},
+					},
+				},
+			},
+		},
+	},
+};
+
+function run(command: string, args: string[], input: string, signal: AbortSignal): Promise<string> {
 	return new Promise((resolve, reject) => {
-		// Headless Claude Code reuses the user's existing login; no API key needed.
-		const args = ['-p', '--model', model, '--output-format', 'json', '--system-prompt', SYSTEM_PROMPT, '--tools', '', '--no-session-persistence', '--setting-sources', ''];
-		if (effort) args.push('--effort', effort);
-		const child = spawn(
-			'claude',
-			args,
-			{signal, stdio: ['pipe', 'pipe', 'pipe']},
-		);
+		const child = spawn(command, args, {signal, stdio: ['pipe', 'pipe', 'pipe']});
 		let stdout = '';
 		let stderr = '';
 		child.stdout.on('data', chunk => (stdout += chunk));
 		child.stderr.on('data', chunk => (stderr += chunk));
 		child.on('error', reject);
 		child.on('close', code => {
-			if (code !== 0) {
-				reject(new Error(stderr.trim() || `claude exited with code ${code}`));
-				return;
-			}
-			try {
-				resolve(parseEnvelope(stdout));
-			} catch (e) {
-				reject(e);
-			}
+			if (code === 0) resolve(stdout);
+			else reject(new Error(lastLines(stderr) || `${command} exited with code ${code}`));
 		});
-		child.stdin.end(draft);
+		child.stdin.end(input);
 	});
+}
+
+function lastLines(text: string): string {
+	return text.trim().split('\n').slice(-3).join('\n');
 }
 
 type ModelUsage = {
@@ -82,7 +132,7 @@ type ModelUsage = {
 	thinkingTokens?: number;
 	costUSD: number;
 };
-type Envelope = {
+type ClaudeEnvelope = {
 	result?: string;
 	is_error?: boolean;
 	duration_ms: number;
@@ -92,8 +142,8 @@ type Envelope = {
 
 // `--output-format json` wraps the model's reply with usage and cost.
 // total_cost_usd is a list-price estimate; on a subscription it counts against plan limits instead.
-function parseEnvelope(stdout: string): Rewrite {
-	const envelope = JSON.parse(stdout) as Envelope;
+function parseClaudeEnvelope(stdout: string): Rewrite {
+	const envelope = JSON.parse(stdout) as ClaudeEnvelope;
 	if (envelope.is_error || typeof envelope.result !== 'string') {
 		throw new Error(envelope.result || 'claude returned no result');
 	}
@@ -107,6 +157,35 @@ function parseEnvelope(stdout: string): Rewrite {
 		durationMs: envelope.duration_ms,
 	};
 	return {...parse(envelope.result), usage};
+}
+
+type CodexEvent =
+	| {type: 'item.completed'; item: {type: string; text?: string}}
+	| {type: 'turn.completed'; usage: {input_tokens: number; output_tokens: number; reasoning_output_tokens?: number}}
+	| {type: 'turn.failed'; error?: {message?: string}}
+	| {type: 'error'; message?: string}
+	| {type: string};
+
+// `codex exec --json` prints one JSON event per line; the reply is the last agent_message.
+function parseCodexEvents(stdout: string, model: string, durationMs: number): Rewrite {
+	let reply: string | undefined;
+	let usage: Usage | undefined;
+	for (const line of stdout.split('\n')) {
+		if (!line.trim()) continue;
+		const event = JSON.parse(line) as CodexEvent;
+		if (event.type === 'item.completed' && 'item' in event && event.item.type === 'agent_message') {
+			reply = event.item.text;
+		} else if (event.type === 'turn.completed' && 'usage' in event) {
+			const u = event.usage;
+			usage = {model, inputTokens: u.input_tokens, outputTokens: u.output_tokens, thinkingTokens: u.reasoning_output_tokens ?? 0, durationMs};
+		} else if (event.type === 'turn.failed' && 'error' in event) {
+			throw new Error(event.error?.message || 'codex turn failed');
+		} else if (event.type === 'error' && 'message' in event) {
+			throw new Error(event.message || 'codex error');
+		}
+	}
+	if (!reply) throw new Error('codex returned no reply');
+	return {...parse(reply), usage};
 }
 
 function parse(output: string): Omit<Rewrite, 'usage'> {

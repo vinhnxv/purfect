@@ -158,7 +158,8 @@ function UsageLine({usage}: {usage: Usage}) {
 	return (
 		<Text dimColor>
 			{usage.model} · {k(usage.inputTokens)} in · {k(usage.outputTokens)} out
-			{usage.thinkingTokens > 0 && ` (${k(usage.thinkingTokens)} thinking)`} · ~${usage.costUsd.toFixed(4)} ·{' '}
+			{usage.thinkingTokens > 0 && ` (${k(usage.thinkingTokens)} thinking)`}
+			{usage.costUsd !== undefined && ` · ~$${usage.costUsd.toFixed(4)}`} ·{' '}
 			{(usage.durationMs / 1000).toFixed(1)}s
 		</Text>
 	);

@@ -14,6 +14,16 @@ npm start                # standalone: approved prompt is copied to the clipboar
 bin/purfect.js FILE      # editor mode: rewrites FILE in place on approve
 ```
 
+### Inside Codex
+
+Codex reads only `VISUAL`/`EDITOR` from its environment, so set it when launching:
+
+```sh
+VISUAL=/path/to/purfect/bin/purfect.js PURFECT_BACKEND=codex codex
+```
+
+Press `Ctrl+G` in the composer.
+
 ### Inside Claude Code
 
 Set `EDITOR` to `bin/purfect.js` (e.g. in a project's `.claude/settings.json` `env`), type a
@@ -24,16 +34,25 @@ draft in the prompt box, press `Ctrl+G`, approve with `a`, then press Enter to s
 Optional file `~/.config/purfect/config.json` (or `$XDG_CONFIG_HOME/purfect/config.json`):
 
 ```json
-{ "model": "haiku", "effort": "low" }
+{
+  "backend": "claude",
+  "claude": { "model": "haiku" },
+  "codex": { "model": "gpt-6-luna", "effort": "low" }
+}
 ```
 
-| Setting | Env var         | Default |
-| ------- | --------------- | ------- |
-| `model` | `PURFECT_MODEL` | `haiku` |
-| `effort` | `PURFECT_EFFORT` | model default (`low`, `medium`, `high`, `xhigh`, `max`) |
+| Setting                  | Env var           | Default                                    |
+| ------------------------ | ----------------- | ------------------------------------------ |
+| `backend`                | `PURFECT_BACKEND` | `claude` (`claude` or `codex`)             |
+| `<backend>.model`        | `PURFECT_MODEL`   | `haiku` for claude, Codex's own for codex  |
+| `<backend>.effort`       | `PURFECT_EFFORT`  | the backend CLI's default                  |
 
-Env vars win over the file. For per-project overrides, set them in the project's
-`.claude/settings.json` `env` block.
+Env vars win over the file and apply to the active backend. The backend is independent of the
+host CLI: Claude Code can rewrite with Codex and vice versa.
+
+- Claude backend: `claude -p`, no tools, user settings skipped.
+- Codex backend: `codex exec` in a read-only sandbox from the temp dir, session not saved. Codex
+  always sends its own instructions and tool definitions, so expect ~18k input tokens per rewrite.
 
 The review screen shows tokens and an estimated cost per rewrite. On a Claude subscription
 the cost is a list-price estimate; usage counts against your plan limits (`/usage`).

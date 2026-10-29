@@ -2,26 +2,40 @@ import {readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {join} from 'node:path';
 
-export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
-export type Effort = (typeof EFFORTS)[number];
-// effort is unset by default: claude then uses the model's own default.
-export type Config = {model: string; effort?: Effort};
+export const BACKENDS = ['claude', 'codex'] as const;
+export type Backend = (typeof BACKENDS)[number];
 
-const DEFAULTS: Config = {model: 'haiku'};
+// Valid values for `claude --effort`. Codex effort levels vary per model, so Codex validates its own.
+const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+// Resolved settings for the active backend. Unset model/effort fall back to the backend CLI's own default.
+export type Config = {backend: Backend; model?: string; effort?: string};
+
+type BackendSettings = {model?: string; effort?: string};
+type ConfigFile = {backend?: Backend} & Partial<Record<Backend, BackendSettings>>;
+
+const DEFAULT_BACKEND: Backend = 'claude';
+const DEFAULT_MODELS: Partial<Record<Backend, string>> = {claude: 'haiku'};
 
 export const CONFIG_PATH = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'purfect', 'config.json');
 
 // Precedence: environment (PURFECT_*) > config file > defaults.
-// Per-project overrides go through env, e.g. the `env` block of .claude/settings.json.
+// Per-host overrides go through env: the `env` block of .claude/settings.json for Claude Code,
+// or the command that launches Codex.
 export function loadConfig(): Config {
 	const file = readConfigFile();
+	const backend = check(process.env.PURFECT_BACKEND || undefined, BACKENDS, 'PURFECT_BACKEND') ?? file.backend ?? DEFAULT_BACKEND;
+	const settings = file[backend] ?? {};
+	const effort = process.env.PURFECT_EFFORT || settings.effort;
+	if (backend === 'claude') check(effort, CLAUDE_EFFORTS, process.env.PURFECT_EFFORT ? 'PURFECT_EFFORT' : `"claude.effort" in ${CONFIG_PATH}`);
 	return {
-		model: process.env.PURFECT_MODEL || file.model || DEFAULTS.model,
-		effort: checkEffort(process.env.PURFECT_EFFORT || undefined, 'PURFECT_EFFORT') ?? file.effort,
+		backend,
+		model: process.env.PURFECT_MODEL || settings.model || DEFAULT_MODELS[backend],
+		effort,
 	};
 }
 
-function readConfigFile(): Partial<Config> {
+function readConfigFile(): ConfigFile {
 	let text: string;
 	try {
 		text = readFileSync(CONFIG_PATH, 'utf8');
@@ -35,20 +49,28 @@ function readConfigFile(): Partial<Config> {
 	} catch (e) {
 		throw new Error(`Invalid JSON in ${CONFIG_PATH}: ${(e as Error).message}`);
 	}
-	if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-		throw new Error(`${CONFIG_PATH} must contain a JSON object`);
+	if (!isObject(data)) throw new Error(`${CONFIG_PATH} must contain a JSON object`);
+	const result: ConfigFile = {backend: check(data.backend, BACKENDS, `"backend" in ${CONFIG_PATH}`)};
+	for (const backend of BACKENDS) {
+		const section = data[backend];
+		if (section === undefined) continue;
+		if (!isObject(section)) throw new Error(`"${backend}" in ${CONFIG_PATH} must be an object`);
+		for (const key of ['model', 'effort'] as const) {
+			if (section[key] !== undefined && typeof section[key] !== 'string') {
+				throw new Error(`"${backend}.${key}" in ${CONFIG_PATH} must be a string`);
+			}
+		}
+		result[backend] = {model: section.model as string | undefined, effort: section.effort as string | undefined};
 	}
-	const {model, effort} = data as Record<string, unknown>;
-	if (model !== undefined && typeof model !== 'string') {
-		throw new Error(`"model" in ${CONFIG_PATH} must be a string`);
-	}
-	return {model, effort: checkEffort(effort, `"effort" in ${CONFIG_PATH}`)};
+	return result;
 }
 
-function checkEffort(value: unknown, source: string): Effort | undefined {
+function isObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function check<T extends string>(value: unknown, allowed: readonly T[], source: string): T | undefined {
 	if (value === undefined) return undefined;
-	if (!EFFORTS.includes(value as Effort)) {
-		throw new Error(`${source} must be one of ${EFFORTS.join(', ')}`);
-	}
-	return value as Effort;
+	if (!allowed.includes(value as T)) throw new Error(`${source} must be one of ${allowed.join(', ')}`);
+	return value as T;
 }
