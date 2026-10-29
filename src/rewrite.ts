@@ -11,7 +11,7 @@ export type Usage = {
 	inputTokens: number;
 	outputTokens: number;
 	thinkingTokens: number;
-	// Only Claude reports a (list-price) cost; Codex reports tokens only.
+	// List-price estimate: reported by Claude, computed from CODEX_PRICES for Codex; unknown models get none.
 	costUsd?: number;
 	durationMs: number;
 };
@@ -182,10 +182,28 @@ function parseClaudeEnvelope(stdout: string): Rewrite {
 
 type CodexEvent =
 	| {type: 'item.completed'; item: {type: string; text?: string}}
-	| {type: 'turn.completed'; usage: {input_tokens: number; output_tokens: number; reasoning_output_tokens?: number}}
+	| {type: 'turn.completed'; usage: {input_tokens: number; cached_input_tokens?: number; output_tokens: number; reasoning_output_tokens?: number}}
 	| {type: 'turn.failed'; error?: {message?: string}}
 	| {type: 'error'; message?: string}
 	| {type: string};
+
+// USD per 1M tokens, standard short-context (<=272K input) tier, from
+// https://developers.openai.com/api/docs/pricing (checked 2026-10-30). On a ChatGPT login Codex
+// usage counts against plan limits instead, so this is a comparison figure, not a bill.
+const CODEX_PRICES: Record<string, {input: number; cachedInput: number; output: number}> = {
+	'gpt-6.1-sol': {input: 2, cachedInput: 0.1, output: 10},
+	'gpt-6-sol': {input: 2, cachedInput: 0.2, output: 10},
+	'gpt-6-luna': {input: 0.1, cachedInput: 0.01, output: 0.5},
+	'gpt-5.6-sol': {input: 4, cachedInput: 0.4, output: 20},
+	'gpt-5.6-luna': {input: 0.2, cachedInput: 0.02, output: 1.2},
+};
+
+// input_tokens includes cached_input_tokens; output_tokens includes reasoning tokens.
+function codexCost(model: string, input: number, cached: number, output: number): number | undefined {
+	const price = CODEX_PRICES[model];
+	if (!price) return undefined;
+	return ((input - cached) * price.input + cached * price.cachedInput + output * price.output) / 1_000_000;
+}
 
 // `codex exec --json` prints one JSON event per line; the reply is the last agent_message.
 function parseCodexEvents(stdout: string, model: string, durationMs: number): Rewrite {
@@ -198,7 +216,14 @@ function parseCodexEvents(stdout: string, model: string, durationMs: number): Re
 			reply = event.item.text;
 		} else if (event.type === 'turn.completed' && 'usage' in event) {
 			const u = event.usage;
-			usage = {model, inputTokens: u.input_tokens, outputTokens: u.output_tokens, thinkingTokens: u.reasoning_output_tokens ?? 0, durationMs};
+			usage = {
+				model,
+				inputTokens: u.input_tokens,
+				outputTokens: u.output_tokens,
+				thinkingTokens: u.reasoning_output_tokens ?? 0,
+				costUsd: codexCost(model, u.input_tokens, u.cached_input_tokens ?? 0, u.output_tokens),
+				durationMs,
+			};
 		} else if (event.type === 'turn.failed' && 'error' in event) {
 			throw new Error(event.error?.message || 'codex turn failed');
 		} else if (event.type === 'error' && 'message' in event) {
