@@ -263,9 +263,13 @@ function App() {
 
 			{stage === 'review' && (
 				<Box flexDirection="column">
+					{canUse && (
+						<Text bold color="green">
+							⏎ Enter (ô trống) = duyệt prompt này
+						</Text>
+					)}
 					<Text dimColor>
-						{canUse ? 'Nhắn để chỉnh lại (VD: ngắn hơn, thêm yêu cầu viết test) · Enter trống = duyệt · ' : ''}
-						gõ / để xem lệnh
+						{canUse ? 'hoặc nhắn để chỉnh lại (VD: ngắn hơn, thêm yêu cầu viết test) · ' : ''}gõ / để xem lệnh
 					</Text>
 					<Box>
 						<Text color="cyan">› </Text>
