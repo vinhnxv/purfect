@@ -4,7 +4,8 @@ import {useEffect, useState} from 'react';
 import {Box, Text, render, useApp, useInput} from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
-import {rewrite, type Rewrite} from './rewrite.js';
+import {loadConfig} from './config.js';
+import {rewrite, type Rewrite, type Usage} from './rewrite.js';
 
 type Stage = 'compose' | 'rewriting' | 'review' | 'edit';
 
@@ -12,6 +13,15 @@ type Stage = 'compose' | 'rewriting' | 'review' | 'edit';
 // The file holds the draft; approving overwrites it, quitting leaves it untouched.
 const file = process.argv[2];
 const initialDraft = file ? readFileSync(file, 'utf8').trim() : '';
+
+let config;
+try {
+	config = loadConfig();
+} catch (e) {
+	process.stderr.write(`purfect: ${(e as Error).message}\n`);
+	process.exit(1);
+}
+const {model} = config;
 
 let approved: string | undefined;
 
@@ -26,7 +36,7 @@ function App() {
 	useEffect(() => {
 		if (stage !== 'rewriting') return;
 		const controller = new AbortController();
-		rewrite(draft, controller.signal).then(
+		rewrite(draft, model, controller.signal).then(
 			r => {
 				setResult(r);
 				setError(undefined);
@@ -115,6 +125,8 @@ function App() {
 				</Box>
 			)}
 
+			{stage === 'review' && result?.usage && !error && <UsageLine usage={result.usage} />}
+
 			{stage === 'review' && (
 				<Text dimColor>
 					{result && !error ? '[a] approve  [e] edit  ' : ''}[r] rewrite again  [b] back  [q] quit
@@ -139,6 +151,17 @@ function App() {
 				</Box>
 			)}
 		</Box>
+	);
+}
+
+function UsageLine({usage}: {usage: Usage}) {
+	const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+	return (
+		<Text dimColor>
+			{usage.model} · {k(usage.inputTokens)} in · {k(usage.outputTokens)} out
+			{usage.thinkingTokens > 0 && ` (${k(usage.thinkingTokens)} thinking)`} · ~${usage.costUsd.toFixed(4)} ·{' '}
+			{(usage.durationMs / 1000).toFixed(1)}s
+		</Text>
 	);
 }
 

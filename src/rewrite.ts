@@ -2,7 +2,15 @@ import {spawn} from 'node:child_process';
 
 export type Keyword = {original: string; term: string; meaning: string; why: string};
 export type Explanation = {meaning: string; structure: string; keywords: Keyword[]};
-export type Rewrite = {prompt: string; explanation?: Explanation};
+export type Usage = {
+	model: string;
+	inputTokens: number;
+	outputTokens: number;
+	thinkingTokens: number;
+	costUsd: number;
+	durationMs: number;
+};
+export type Rewrite = {prompt: string; explanation?: Explanation; usage?: Usage};
 
 // Modeled on lang-tutor's translation breakdown. Vietnamese and English drafts get the same
 // shape: each keyword pairs what the user wrote with the English used, explained in Vietnamese.
@@ -35,13 +43,12 @@ Reply with JSON only, no code fence:
  "explanation": {"meaning": "<Vietnamese>", "structure": "<Vietnamese>",
    "keywords": [{"original": "<user's words>", "term": "<English>", "meaning": "<Vietnamese>", "why": "<Vietnamese>"}]}}`;
 
-export function rewrite(draft: string, signal: AbortSignal): Promise<Rewrite> {
+export function rewrite(draft: string, model: string, signal: AbortSignal): Promise<Rewrite> {
 	return new Promise((resolve, reject) => {
 		// Headless Claude Code reuses the user's existing login; no API key needed.
-		const model = process.env.PURFECT_MODEL || 'haiku';
 		const child = spawn(
 			'claude',
-			['-p', '--model', model, '--system-prompt', SYSTEM_PROMPT, '--tools', '', '--no-session-persistence', '--setting-sources', ''],
+			['-p', '--model', model, '--output-format', 'json', '--system-prompt', SYSTEM_PROMPT, '--tools', '', '--no-session-persistence', '--setting-sources', ''],
 			{signal, stdio: ['pipe', 'pipe', 'pipe']},
 		);
 		let stdout = '';
@@ -54,13 +61,52 @@ export function rewrite(draft: string, signal: AbortSignal): Promise<Rewrite> {
 				reject(new Error(stderr.trim() || `claude exited with code ${code}`));
 				return;
 			}
-			resolve(parse(stdout));
+			try {
+				resolve(parseEnvelope(stdout));
+			} catch (e) {
+				reject(e);
+			}
 		});
 		child.stdin.end(draft);
 	});
 }
 
-function parse(output: string): Rewrite {
+type ModelUsage = {
+	inputTokens: number;
+	outputTokens: number;
+	cacheReadInputTokens: number;
+	cacheCreationInputTokens: number;
+	thinkingTokens?: number;
+	costUSD: number;
+};
+type Envelope = {
+	result?: string;
+	is_error?: boolean;
+	duration_ms: number;
+	total_cost_usd: number;
+	modelUsage?: Record<string, ModelUsage>;
+};
+
+// `--output-format json` wraps the model's reply with usage and cost.
+// total_cost_usd is a list-price estimate; on a subscription it counts against plan limits instead.
+function parseEnvelope(stdout: string): Rewrite {
+	const envelope = JSON.parse(stdout) as Envelope;
+	if (envelope.is_error || typeof envelope.result !== 'string') {
+		throw new Error(envelope.result || 'claude returned no result');
+	}
+	const [model, m] = Object.entries(envelope.modelUsage ?? {})[0] ?? [];
+	const usage: Usage | undefined = m && {
+		model: model!,
+		inputTokens: m.inputTokens + m.cacheReadInputTokens + m.cacheCreationInputTokens,
+		outputTokens: m.outputTokens,
+		thinkingTokens: m.thinkingTokens ?? 0,
+		costUsd: envelope.total_cost_usd,
+		durationMs: envelope.duration_ms,
+	};
+	return {...parse(envelope.result), usage};
+}
+
+function parse(output: string): Omit<Rewrite, 'usage'> {
 	const json = output.slice(output.indexOf('{'), output.lastIndexOf('}') + 1);
 	try {
 		const data = JSON.parse(json) as Partial<Rewrite>;
