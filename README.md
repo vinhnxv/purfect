@@ -19,7 +19,7 @@ bin/purfect.js FILE      # editor mode: rewrites FILE in place on approve
 Codex reads only `VISUAL`/`EDITOR` from its environment, so set it when launching:
 
 ```sh
-VISUAL=/path/to/purfect/bin/purfect.js PURFECT_BACKEND=codex codex
+VISUAL=/path/to/purfect/bin/purfect.js codex
 ```
 
 Press `Ctrl+G` in the composer.
@@ -35,7 +35,6 @@ Optional file `~/.config/purfect/config.json` (or `$XDG_CONFIG_HOME/purfect/conf
 
 ```json
 {
-  "backend": "claude",
   "claude": { "model": "haiku" },
   "codex": { "model": "gpt-6-luna", "effort": "low" }
 }
@@ -43,12 +42,13 @@ Optional file `~/.config/purfect/config.json` (or `$XDG_CONFIG_HOME/purfect/conf
 
 | Setting                  | Env var           | Default                                    |
 | ------------------------ | ----------------- | ------------------------------------------ |
-| `backend`                | `PURFECT_BACKEND` | `claude` (`claude` or `codex`)             |
+| `backend`                | `PURFECT_BACKEND` | the CLI that launched purfect, else `claude` |
 | `<backend>.model`        | `PURFECT_MODEL`   | `haiku` for claude, `gpt-6-luna` for codex |
 | `<backend>.effort`       | `PURFECT_EFFORT`  | the backend CLI's default                  |
 
-Env vars win over the file and apply to the active backend. The backend is independent of the
-host CLI: Claude Code can rewrite with Codex and vice versa.
+Env vars win over the file and apply to the active backend. Without `backend`, purfect uses the
+CLI it was launched from (Claude Code → claude, Codex → codex). Set `backend` or `PURFECT_BACKEND`
+to force one, e.g. rewrite with Codex while in Claude Code.
 
 - Claude backend: `claude -p`, no tools, user settings skipped.
 - Codex backend: `codex exec` in a read-only sandbox from the temp dir, session not saved. Codex

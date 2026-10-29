@@ -1,6 +1,7 @@
+import {spawnSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
-import {join} from 'node:path';
+import {basename, join} from 'node:path';
 
 export const BACKENDS = ['claude', 'codex'] as const;
 export type Backend = (typeof BACKENDS)[number];
@@ -20,11 +21,12 @@ const DEFAULT_MODELS: Record<Backend, string> = {claude: 'haiku', codex: 'gpt-6-
 export const CONFIG_PATH = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'purfect', 'config.json');
 
 // Precedence: environment (PURFECT_*) > config file > defaults.
+// The default backend is the CLI that launched us (Ctrl+G), falling back to claude.
 // Per-host overrides go through env: the `env` block of .claude/settings.json for Claude Code,
 // or the command that launches Codex.
 export function loadConfig(): Config {
 	const file = readConfigFile();
-	const backend = check(process.env.PURFECT_BACKEND || undefined, BACKENDS, 'PURFECT_BACKEND') ?? file.backend ?? DEFAULT_BACKEND;
+	const backend = check(process.env.PURFECT_BACKEND || undefined, BACKENDS, 'PURFECT_BACKEND') ?? file.backend ?? detectHostCli() ?? DEFAULT_BACKEND;
 	const settings = file[backend] ?? {};
 	const effort = process.env.PURFECT_EFFORT || settings.effort;
 	if (backend === 'claude') check(effort, CLAUDE_EFFORTS, process.env.PURFECT_EFFORT ? 'PURFECT_EFFORT' : `"claude.effort" in ${CONFIG_PATH}`);
@@ -63,6 +65,25 @@ function readConfigFile(): ConfigFile {
 		result[backend] = {model: section.model as string | undefined, effort: section.effort as string | undefined};
 	}
 	return result;
+}
+
+// Walk up the process tree to the nearest claude or codex ancestor. Env markers are not enough:
+// Codex sets none, and CLAUDECODE leaks into a Codex session started from inside Claude Code.
+function detectHostCli(): Backend | undefined {
+	const ps = spawnSync('ps', ['-axo', 'pid=,ppid=,comm='], {encoding: 'utf8'});
+	if (ps.status !== 0) return undefined;
+	const processes = new Map<number, {ppid: number; name: string}>();
+	for (const line of ps.stdout.split('\n')) {
+		const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(line);
+		if (match) processes.set(Number(match[1]), {ppid: Number(match[2]), name: basename(match[3].trim())});
+	}
+	for (let pid = process.ppid, depth = 0; pid > 1 && depth < 10; depth++) {
+		const proc = processes.get(pid);
+		if (!proc) break;
+		if ((BACKENDS as readonly string[]).includes(proc.name)) return proc.name as Backend;
+		pid = proc.ppid;
+	}
+	return undefined;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
