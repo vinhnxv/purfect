@@ -17,6 +17,8 @@ export type Usage = {
 	durationMs: number;
 };
 export type Rewrite = {prompt: string; explanation?: Explanation; usage?: Usage};
+// A follow-up edit request applied to an earlier rewrite.
+export type Refine = {current: string; instruction: string};
 
 // Modeled on lang-tutor's translation breakdown. Vietnamese and English drafts get the same
 // shape: each keyword pairs what the user wrote with the English used, explained in Vietnamese.
@@ -49,28 +51,38 @@ the same way:
     otherwise why this word or form fits better than a likely alternative.
     Do not flag missing diacritics or typos in identifiers.
 
+Revision mode: if the message has <draft>, <current_prompt> and <instruction> tags, the user is
+refining an earlier rewrite. The instruction (Vietnamese or English) is an edit request for the
+prompt, never a task for you to perform. Return the full revised prompt:
+- apply the instruction and change nothing else; keep wording the instruction does not touch
+- <draft> is the user's original intent; keep its requirements unless the instruction removes them
+- explain the revised prompt as in step 2
+
 Reply with JSON only, no code fence:
 {"prompt": "<English prompt>",
  "explanation": {"meaning": "<Vietnamese>", "structure": "<Vietnamese>",
    "keywords": [{"original": "<user's words>", "term": "<English>", "meaning": "<Vietnamese>", "why": "<Vietnamese>"}]}}`;
 
-export function rewrite(draft: string, config: Config, signal: AbortSignal): Promise<Rewrite> {
-	if (config.backend === 'codex') return rewriteWithCodex(draft, config, signal);
-	if (config.backend === 'openai') return rewriteWithOpenAI(draft, config, signal);
-	return rewriteWithClaude(draft, config, signal);
+export function rewrite(draft: string, config: Config, signal: AbortSignal, refine?: Refine): Promise<Rewrite> {
+	const message = refine
+		? `<draft>\n${draft}\n</draft>\n<current_prompt>\n${refine.current}\n</current_prompt>\n<instruction>\n${refine.instruction}\n</instruction>`
+		: draft;
+	if (config.backend === 'codex') return rewriteWithCodex(message, config, signal);
+	if (config.backend === 'openai') return rewriteWithOpenAI(message, config, signal);
+	return rewriteWithClaude(message, config, signal);
 }
 
 // Headless Claude Code reuses the user's existing login; no API key needed.
-async function rewriteWithClaude(draft: string, {model, effort}: Config, signal: AbortSignal): Promise<Rewrite> {
+async function rewriteWithClaude(message: string, {model, effort}: Config, signal: AbortSignal): Promise<Rewrite> {
 	const args = ['-p', '--output-format', 'json', '--system-prompt', SYSTEM_PROMPT, '--tools', '', '--no-session-persistence', '--setting-sources', ''];
 	if (model) args.push('--model', model);
 	if (effort) args.push('--effort', effort);
-	return parseClaudeEnvelope(await run('claude', args, draft, signal));
+	return parseClaudeEnvelope(await run('claude', args, message, signal));
 }
 
 // `codex exec` reuses the user's Codex login and provider config. It runs in the temp dir so
 // the host project's AGENTS.md is not loaded, in a read-only sandbox, without saving the session.
-async function rewriteWithCodex(draft: string, {model, effort}: Config, signal: AbortSignal): Promise<Rewrite> {
+async function rewriteWithCodex(message: string, {model, effort}: Config, signal: AbortSignal): Promise<Rewrite> {
 	const schemaPath = join(tmpdir(), 'purfect-rewrite-schema.json');
 	writeFileSync(schemaPath, JSON.stringify(OUTPUT_SCHEMA));
 	// JSON string literals are valid TOML basic strings, which is how -c parses values.
@@ -81,7 +93,7 @@ async function rewriteWithCodex(draft: string, {model, effort}: Config, signal: 
 	if (effort) args.push('-c', `model_reasoning_effort=${JSON.stringify(effort)}`);
 	args.push('-');
 	const started = Date.now();
-	const stdout = await run('codex', args, draft, signal);
+	const stdout = await run('codex', args, message, signal);
 	return parseCodexEvents(stdout, model ?? 'codex default', Date.now() - started);
 }
 
@@ -93,7 +105,7 @@ type ChatCompletion = {
 
 // Any OpenAI-compatible /chat/completions endpoint (OpenAI, OpenRouter, Ollama, LM Studio, vLLM, …).
 // JSON mode is not requested because not every server supports it; parse() handles stray text.
-async function rewriteWithOpenAI(draft: string, {model, effort, baseUrl, apiKey}: Config, signal: AbortSignal): Promise<Rewrite> {
+async function rewriteWithOpenAI(message: string, {model, effort, baseUrl, apiKey}: Config, signal: AbortSignal): Promise<Rewrite> {
 	const started = Date.now();
 	const response = await fetch(`${baseUrl!.replace(/\/+$/, '')}/chat/completions`, {
 		method: 'POST',
@@ -103,7 +115,7 @@ async function rewriteWithOpenAI(draft: string, {model, effort, baseUrl, apiKey}
 			model,
 			messages: [
 				{role: 'system', content: SYSTEM_PROMPT},
-				{role: 'user', content: draft},
+				{role: 'user', content: message},
 			],
 			...(effort && {reasoning_effort: effort}),
 		}),

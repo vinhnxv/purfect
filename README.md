@@ -79,4 +79,29 @@ and verbs follow the intent ("sửa lại" is "fix", "sửa lại lần nữa" i
 file names and code are kept as written. English mistakes in the draft are listed in the
 explanation with why the fix is right.
 
-Keys in review: `a` approve, `e` edit, `r` rewrite again, `b` back, `q` quit.
+## Review screen
+
+The chat box under the result is always on:
+
+- Type what to change ("ngắn hơn", "thêm yêu cầu viết test", "make it more polite") and press
+  Enter: the prompt is revised in place, as many times as you like.
+- Empty Enter approves.
+- Type `/` to list commands with a short explanation; keep typing to filter (`/e` → `/edit`),
+  `↑↓` to move, `Tab` to complete, `Enter` to run, `Esc` to clear.
+
+| Command    | Does                                                  |
+| ---------- | ----------------------------------------------------- |
+| `/approve` | Approve this prompt and close                         |
+| `/edit`    | Edit the English prompt by hand                       |
+| `/history` | List every version, pick one to continue from         |
+| `/undo`    | Go to the previous version                            |
+| `/redo`    | Rewrite again from the original draft (a new version) |
+| `/back`    | Go back and change the draft                          |
+| `/quit`    | Quit without changing anything                        |
+
+Versions are append-only: every rewrite, refinement and manual edit adds one, and nothing is
+deleted. Picking an old version in `/history` only moves the pointer, so refining from it adds
+a new version at the end and all the others stay available.
+
+Each refinement sends the original draft, the current prompt and your instruction, and returns
+the full revised prompt with a fresh explanation (same backend and cost as a rewrite).
