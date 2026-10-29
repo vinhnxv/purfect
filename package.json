@@ -1,0 +1,29 @@
+{
+  "name": "purfect",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Terminal prompt composer: write a prompt in Vietnamese, rewrite it to English, review and approve",
+  "scripts": {
+    "start": "node bin/purfect.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "ink": "^8.0.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.3.1",
+    "tsx": "^4.23.15"
+  },
+  "bin": {
+    "purfect": "bin/purfect.js"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}
