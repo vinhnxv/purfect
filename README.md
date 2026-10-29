@@ -44,7 +44,7 @@ Optional file `~/.config/purfect/config.json` (or `$XDG_CONFIG_HOME/purfect/conf
 | Setting                  | Env var           | Default                                    |
 | ------------------------ | ----------------- | ------------------------------------------ |
 | `backend`                | `PURFECT_BACKEND` | `claude` (`claude` or `codex`)             |
-| `<backend>.model`        | `PURFECT_MODEL`   | `haiku` for claude, Codex's own for codex  |
+| `<backend>.model`        | `PURFECT_MODEL`   | `haiku` for claude, `gpt-6-luna` for codex |
 | `<backend>.effort`       | `PURFECT_EFFORT`  | the backend CLI's default                  |
 
 Env vars win over the file and apply to the active backend. The backend is independent of the

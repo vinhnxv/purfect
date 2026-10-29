@@ -8,14 +8,14 @@ export type Backend = (typeof BACKENDS)[number];
 // Valid values for `claude --effort`. Codex effort levels vary per model, so Codex validates its own.
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-// Resolved settings for the active backend. Unset model/effort fall back to the backend CLI's own default.
+// Resolved settings for the active backend. Unset effort falls back to the backend CLI's own default.
 export type Config = {backend: Backend; model?: string; effort?: string};
 
 type BackendSettings = {model?: string; effort?: string};
 type ConfigFile = {backend?: Backend} & Partial<Record<Backend, BackendSettings>>;
 
 const DEFAULT_BACKEND: Backend = 'claude';
-const DEFAULT_MODELS: Partial<Record<Backend, string>> = {claude: 'haiku'};
+const DEFAULT_MODELS: Record<Backend, string> = {claude: 'haiku', codex: 'gpt-6-luna'};
 
 export const CONFIG_PATH = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'purfect', 'config.json');
 
