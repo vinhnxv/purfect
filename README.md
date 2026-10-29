@@ -55,6 +55,11 @@ Optional file `~/.config/purfect/config.json` (or `$XDG_CONFIG_HOME/purfect/conf
 | ------------------------ | ----------------- | ------------------------------------------ |
 | `targetLanguage`         | `PURFECT_TARGET_LANG`  | `en`                                   |
 | `displayLanguage`        | `PURFECT_DISPLAY_LANG` | `en`                                   |
+| `tutors.language.enabled` | `PURFECT_LANGUAGE_TUTOR` | `true`                              |
+| `tutors.prompt.enabled`  | `PURFECT_PROMPT_TUTOR` | `true`                                 |
+| `rewrite.instructions`   | `PURFECT_REWRITE_INSTRUCTIONS`  | none                          |
+| `tutors.language.instructions` | `PURFECT_LANGUAGE_INSTRUCTIONS` | none                    |
+| `tutors.prompt.instructions`   | `PURFECT_PROMPT_INSTRUCTIONS`   | none                    |
 | `backend`                | `PURFECT_BACKEND`  | the CLI that launched purfect, else `claude` |
 | `<backend>.model`        | `PURFECT_MODEL`    | `haiku` for claude, `gpt-6-luna` for codex and openai |
 | `<backend>.effort`       | `PURFECT_EFFORT`   | the backend's default                      |
@@ -67,6 +72,28 @@ too). `displayLanguage` is the language of the interface and of both tutors' exp
 limited to the languages with a translated interface: `en`, `vi`, `fr`, `de`, `it`, `es`, `pt`,
 `ja`, `zh`, `ko`. You can change all of these without editing the file: type `/config` in the
 review screen. Changes are saved to the file and apply at once.
+
+### Tutors and extra instructions
+
+Each tutor can be switched off. A tutor that is off is left out of the prompt, so the model does
+not write it: with both off, a rewrite produces about a ninth of the output tokens and returns
+sooner. `/improve` still uses the Prompt tutor's judgement to find what is missing, and shows its
+tips, even while that tutor is off. Type `/tutor` in the review screen to switch both off or on,
+or use `/config` for each one.
+
+Each tutor, and the rewrite itself, takes extra instructions in your own words. They are added to
+that section of the prompt and can shape the output but not the reply format or the rule to stay
+faithful to your draft. Keep them short; they are sent with every request.
+
+```json
+{
+  "rewrite": { "instructions": "Keep the words deploy and PR in English. Never add please." },
+  "tutors": {
+    "language": { "enabled": true, "instructions": "I often get prepositions wrong; list those first." },
+    "prompt": { "enabled": true, "instructions": "This repo uses pnpm; suggest adding the test command." }
+  }
+}
+```
 
 Env vars win over the file and apply to the active backend. Without `backend`, purfect uses the
 CLI it was launched from (Claude Code → claude, Codex → codex). Set `backend` or `PURFECT_BACKEND`
@@ -121,7 +148,8 @@ The chat box under the result is always on:
 | `/undo`    | Go to the previous version                            |
 | `/redo`    | Rewrite again from the original draft (a new version) |
 | `/back`    | Go back and change the draft                          |
-| `/config`  | Change languages, backend, model, effort (saved)      |
+| `/tutor`   | Switch both tutors on or off (saved)                  |
+| `/config`  | Change languages, tutors, instructions, backend, model, effort (saved) |
 | `/quit`    | Quit without changing anything                        |
 
 Versions are append-only: every rewrite, refinement and manual edit adds one, and nothing is

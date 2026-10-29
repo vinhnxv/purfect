@@ -4,15 +4,32 @@ import TextInput from 'ink-text-input';
 import {BACKENDS, CONFIG_PATH, DISPLAY_LANGUAGES, ENV_NAMES, LANGUAGES, languageLabel, type Config, type SettingKey} from './config.js';
 import type {Messages} from './i18n.js';
 
-const KEYS: SettingKey[] = ['targetLanguage', 'displayLanguage', 'backend', 'model', 'effort'];
+const KEYS: SettingKey[] = [
+	'targetLanguage',
+	'displayLanguage',
+	'languageTutor',
+	'promptTutor',
+	'backend',
+	'model',
+	'effort',
+	'rewriteInstructions',
+	'languageInstructions',
+	'promptInstructions',
+];
 
 type Option = {value: string; label: string};
 
-// Rows with a fixed set of values open a picker; model and effort are typed.
-function optionsFor(key: SettingKey): Option[] | undefined {
+// Rows with a fixed set of values open a picker; the rest are typed.
+function optionsFor(key: SettingKey, msgs: Messages): Option[] | undefined {
 	if (key === 'targetLanguage') return LANGUAGES.map(l => ({value: l.code, label: languageLabel(l.code)}));
 	if (key === 'displayLanguage') return DISPLAY_LANGUAGES.map(l => ({value: l.code, label: languageLabel(l.code)}));
 	if (key === 'backend') return BACKENDS.map(b => ({value: b, label: b}));
+	if (key === 'languageTutor' || key === 'promptTutor') {
+		return [
+			{value: 'true', label: msgs.settings.on},
+			{value: 'false', label: msgs.settings.off},
+		];
+	}
 	return undefined;
 }
 
@@ -34,21 +51,22 @@ export function Settings({config, msgs, onSave, onClose}: Props) {
 	const [feedback, setFeedback] = useState<{text: string; error?: boolean}>();
 
 	const key = KEYS[row]!;
-	const options = optionsFor(key);
+	const options = optionsFor(key, msgs);
 
 	const valueOf = (k: SettingKey) => {
 		const value = config[k];
 		if (k === 'targetLanguage' || k === 'displayLanguage') return languageLabel(config[k]);
+		if (typeof value === 'boolean') return value ? t.on : t.off;
 		return value || t.unset;
 	};
 
 	const open = () => {
 		setFeedback(undefined);
 		if (options) {
-			setOption(Math.max(0, options.findIndex(o => o.value === config[key])));
+			setOption(Math.max(0, options.findIndex(o => o.value === String(config[key]))));
 			setMode('pick');
 		} else {
-			setText(config[key] ?? '');
+			setText(String(config[key] ?? ''));
 			setMode('text');
 		}
 	};
@@ -87,10 +105,19 @@ export function Settings({config, msgs, onSave, onClose}: Props) {
 				<Text bold>{mode === 'list' ? t.title : mode === 'pick' ? t.pick(t.labels[key]) : t.text(t.labels[key])}</Text>
 				{mode === 'list' &&
 					KEYS.map((k, i) => (
-						<Text key={k} color={i === row ? 'cyan' : undefined} dimColor={i !== row}>
-							{i === row ? '❯' : ' '} {t.labels[k].padEnd(20)} {valueOf(k)}
-							{process.env[ENV_NAMES[k]] ? `  (${t.env(ENV_NAMES[k])})` : ''}
-						</Text>
+						// Label and value sit in separate boxes so wide characters (CJK, Thai) do not break the columns.
+						<Box key={k}>
+							<Text color={i === row ? 'cyan' : undefined}>{i === row ? '❯ ' : '  '}</Text>
+							<Box width={34}>
+								<Text color={i === row ? 'cyan' : undefined} dimColor={i !== row} wrap="truncate-end">
+									{t.labels[k]}
+								</Text>
+							</Box>
+							<Text dimColor={i !== row} wrap="truncate-end">
+								{valueOf(k)}
+								{process.env[ENV_NAMES[k]] ? `  (${t.env(ENV_NAMES[k])})` : ''}
+							</Text>
+						</Box>
 					))}
 				{mode === 'pick' &&
 					options!.map((o, i) => (

@@ -48,7 +48,10 @@ function App() {
 	const [warnedFor, setWarnedFor] = useState<string>(); // prompt we already warned about unfilled placeholders
 	const [edited, setEdited] = useState('');
 	const [error, setError] = useState<string>();
-	const [notice, setNotice] = useState<string>();
+	const [noticeState, setNoticeState] = useState<{text: string; info?: boolean}>();
+	// Warnings are red; `info` marks a plain confirmation.
+	const setNotice = (text?: string, info = false) => setNoticeState(text ? {text, info} : undefined);
+	const notice = noticeState?.text;
 
 	const result = versions[current]?.result;
 	const canUse = Boolean(result) && !error;
@@ -157,6 +160,15 @@ function App() {
 		} else if (command === 'edit') {
 			setEdited(result!.prompt);
 			setStage('edit');
+		} else if (command === 'tutor') {
+			// One switch for both tutors: off if either is on, otherwise on. Fine control is in /config.
+			const enable = !(cfg.languageTutor || cfg.promptTutor);
+			try {
+				setCfg(saveSetting(saveSetting(cfg, 'languageTutor', String(enable)), 'promptTutor', String(enable)));
+				setNotice(enable ? msgs.tutorsOn : msgs.tutorsOff, true);
+			} catch (e) {
+				setNotice((e as Error).message);
+			}
 		} else if (command === 'config') {
 			setStage('config');
 		} else if (command === 'history') {
@@ -264,7 +276,7 @@ function App() {
 
 			{stage === 'review' && result?.usage && !error && <UsageLine usage={result.usage} />}
 
-			{stage === 'review' && notice && <Text color="red">{notice}</Text>}
+			{stage === 'review' && noticeState && <Text color={noticeState.info ? 'green' : 'red'}>{noticeState.text}</Text>}
 
 			{stage === 'review' && (
 				<Box flexDirection="column">

@@ -53,8 +53,24 @@ export const ENV_NAMES = {
 	backend: 'PURFECT_BACKEND',
 	model: 'PURFECT_MODEL',
 	effort: 'PURFECT_EFFORT',
+	languageTutor: 'PURFECT_LANGUAGE_TUTOR',
+	promptTutor: 'PURFECT_PROMPT_TUTOR',
+	rewriteInstructions: 'PURFECT_REWRITE_INSTRUCTIONS',
+	languageInstructions: 'PURFECT_LANGUAGE_INSTRUCTIONS',
+	promptInstructions: 'PURFECT_PROMPT_INSTRUCTIONS',
 } as const;
 export type SettingKey = keyof typeof ENV_NAMES;
+
+// Where each tutor and instruction setting lives in the config file:
+//   {"tutors": {"language": {"enabled": true, "instructions": "…"}, "prompt": {…}}, "rewrite": {"instructions": "…"}}
+const FILE_PATHS = {
+	languageTutor: ['tutors', 'language', 'enabled'],
+	promptTutor: ['tutors', 'prompt', 'enabled'],
+	languageInstructions: ['tutors', 'language', 'instructions'],
+	promptInstructions: ['tutors', 'prompt', 'instructions'],
+	rewriteInstructions: ['rewrite', 'instructions'],
+} as const;
+type TutorKey = keyof typeof FILE_PATHS;
 
 // Resolved settings for the active backend. Unset effort falls back to the backend's own default.
 // baseUrl and apiKey apply to the openai backend only.
@@ -62,6 +78,13 @@ export type Config = {
 	backend: Backend;
 	targetLanguage: LanguageCode;
 	displayLanguage: DisplayCode;
+	// The two tutors shown under a rewrite. Switching one off drops its section from the prompt, so
+	// the model does not generate it. Instructions are extra user guidance added to that section.
+	languageTutor: boolean;
+	promptTutor: boolean;
+	rewriteInstructions?: string;
+	languageInstructions?: string;
+	promptInstructions?: string;
 	model?: string;
 	effort?: string;
 	baseUrl?: string;
@@ -70,7 +93,16 @@ export type Config = {
 
 const SETTING_KEYS = ['model', 'effort', 'baseUrl', 'apiKey'] as const;
 type BackendSettings = Partial<Record<(typeof SETTING_KEYS)[number], string>>;
-type ConfigFile = {backend?: Backend; targetLanguage?: LanguageCode; displayLanguage?: DisplayCode} & Partial<Record<Backend, BackendSettings>>;
+type ConfigFile = {
+	backend?: Backend;
+	targetLanguage?: LanguageCode;
+	displayLanguage?: DisplayCode;
+	languageTutor?: boolean;
+	promptTutor?: boolean;
+	rewriteInstructions?: string;
+	languageInstructions?: string;
+	promptInstructions?: string;
+} & Partial<Record<Backend, BackendSettings>>;
 
 const DEFAULT_BACKEND: Backend = 'claude';
 const DEFAULT_TARGET_LANGUAGE: LanguageCode = 'en';
@@ -96,6 +128,11 @@ export function loadConfig(chosenBackend?: Backend): Config {
 		backend,
 		targetLanguage: parseLanguage(process.env[ENV_NAMES.targetLanguage], ENV_NAMES.targetLanguage) ?? file.targetLanguage ?? DEFAULT_TARGET_LANGUAGE,
 		displayLanguage: (parseLanguage(process.env[ENV_NAMES.displayLanguage], ENV_NAMES.displayLanguage, DISPLAY_CODES) as DisplayCode | undefined) ?? file.displayLanguage ?? DEFAULT_DISPLAY_LANGUAGE,
+		languageTutor: parseBoolean(process.env[ENV_NAMES.languageTutor], ENV_NAMES.languageTutor) ?? file.languageTutor ?? true,
+		promptTutor: parseBoolean(process.env[ENV_NAMES.promptTutor], ENV_NAMES.promptTutor) ?? file.promptTutor ?? true,
+		rewriteInstructions: process.env[ENV_NAMES.rewriteInstructions] || file.rewriteInstructions,
+		languageInstructions: process.env[ENV_NAMES.languageInstructions] || file.languageInstructions,
+		promptInstructions: process.env[ENV_NAMES.promptInstructions] || file.promptInstructions,
 		model: process.env[ENV_NAMES.model] || settings.model || DEFAULT_MODELS[backend],
 		effort,
 		...(backend === 'openai' && {
@@ -122,7 +159,19 @@ export function saveSetting(current: Config, key: SettingKey, value: string): Co
 	if (key === 'backend') {
 		const backend = check(value, BACKENDS, key)!;
 		updateConfigFile(data => void (data.backend = backend));
-		return {...loadConfig(backend), targetLanguage: current.targetLanguage, displayLanguage: current.displayLanguage};
+		const {model, effort, baseUrl, apiKey} = loadConfig(backend);
+		return {...current, backend, model, effort, baseUrl, apiKey};
+	}
+	if (key === 'languageTutor' || key === 'promptTutor') {
+		const enabled = parseBoolean(value, key)!;
+		updateConfigFile(data => setPath(data, FILE_PATHS[key], enabled));
+		return {...current, [key]: enabled};
+	}
+	if (key in FILE_PATHS) {
+		// The tutor and rewrite instructions; blank removes them.
+		const text = value.trim() || undefined;
+		updateConfigFile(data => setPath(data, FILE_PATHS[key as TutorKey], text));
+		return {...current, [key]: text};
 	}
 	// model and effort belong to the active backend; blank clears the override.
 	const setting = value.trim() || undefined;
@@ -133,6 +182,14 @@ export function saveSetting(current: Config, key: SettingKey, value: string): Co
 		else delete section[key];
 	});
 	return {...current, [key]: setting ?? (key === 'model' ? DEFAULT_MODELS[current.backend] : undefined)};
+}
+
+function setPath(data: Record<string, unknown>, path: readonly string[], value: boolean | string | undefined): void {
+	let node = data;
+	for (const name of path.slice(0, -1)) node = (isObject(node[name]) ? node[name] : (node[name] = {})) as Record<string, unknown>;
+	const last = path[path.length - 1]!;
+	if (value === undefined) delete node[last];
+	else node[last] = value;
 }
 
 function readRawConfig(): Record<string, unknown> {
@@ -168,6 +225,7 @@ function readConfigFile(): ConfigFile {
 		targetLanguage: parseLanguage(data.targetLanguage, `"targetLanguage" in ${CONFIG_PATH}`),
 		displayLanguage: parseLanguage(data.displayLanguage, `"displayLanguage" in ${CONFIG_PATH}`, DISPLAY_CODES) as DisplayCode | undefined,
 	};
+	readTutors(data, result);
 	for (const backend of BACKENDS) {
 		const section = data[backend];
 		if (section === undefined) continue;
@@ -181,6 +239,29 @@ function readConfigFile(): ConfigFile {
 		result[backend] = settings;
 	}
 	return result;
+}
+
+// Reads the nested tutor and rewrite blocks into the flat ConfigFile fields.
+function readTutors(data: Record<string, unknown>, result: ConfigFile): void {
+	const section = (parent: Record<string, unknown>, name: string, where: string) => {
+		if (parent[name] === undefined) return {};
+		if (!isObject(parent[name])) throw new Error(`"${where}" in ${CONFIG_PATH} must be an object`);
+		return parent[name];
+	};
+	const text = (block: Record<string, unknown>, name: string, where: string) => {
+		if (block[name] === undefined) return undefined;
+		if (typeof block[name] !== 'string') throw new Error(`"${where}.${name}" in ${CONFIG_PATH} must be a string`);
+		return block[name];
+	};
+	const tutors = section(data, 'tutors', 'tutors');
+	const language = section(tutors, 'language', 'tutors.language');
+	const prompt = section(tutors, 'prompt', 'tutors.prompt');
+	const rewrite = section(data, 'rewrite', 'rewrite');
+	result.languageTutor = parseBoolean(language.enabled, `"tutors.language.enabled" in ${CONFIG_PATH}`);
+	result.promptTutor = parseBoolean(prompt.enabled, `"tutors.prompt.enabled" in ${CONFIG_PATH}`);
+	result.languageInstructions = text(language, 'instructions', 'tutors.language');
+	result.promptInstructions = text(prompt, 'instructions', 'tutors.prompt');
+	result.rewriteInstructions = text(rewrite, 'instructions', 'rewrite');
 }
 
 // Walk up the process tree to the nearest claude or codex ancestor. Env markers are not enough:
@@ -210,6 +291,16 @@ function check<T extends string>(value: unknown, allowed: readonly T[], source: 
 	if (value === undefined) return undefined;
 	if (!allowed.includes(value as T)) throw new Error(`${source} must be one of ${allowed.join(', ')}`);
 	return value as T;
+}
+
+// Accepts true/false, or 1/0, on/off, yes/no as text (environment variables are always text).
+function parseBoolean(value: unknown, source: string): boolean | undefined {
+	if (value === undefined || value === '') return undefined;
+	if (typeof value === 'boolean') return value;
+	const word = typeof value === 'string' ? value.trim().toLowerCase() : '';
+	if (['1', 'true', 'on', 'yes'].includes(word)) return true;
+	if (['0', 'false', 'off', 'no'].includes(word)) return false;
+	throw new Error(`${source} must be true or false`);
 }
 
 // Accepts a code ("ja") or a name ("Japanese", "日本語"), case-insensitive; blank counts as unset.
