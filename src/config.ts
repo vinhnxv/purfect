@@ -3,20 +3,26 @@ import {readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {basename, join} from 'node:path';
 
-export const BACKENDS = ['claude', 'codex'] as const;
+export const BACKENDS = ['claude', 'codex', 'openai'] as const;
 export type Backend = (typeof BACKENDS)[number];
 
 // Valid values for `claude --effort`. Codex effort levels vary per model, so Codex validates its own.
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-// Resolved settings for the active backend. Unset effort falls back to the backend CLI's own default.
-export type Config = {backend: Backend; model?: string; effort?: string};
+// CLIs that can launch purfect as their editor; each maps to the backend of the same name.
+const HOST_CLIS: readonly Backend[] = ['claude', 'codex'];
 
-type BackendSettings = {model?: string; effort?: string};
+// Resolved settings for the active backend. Unset effort falls back to the backend's own default.
+// baseUrl and apiKey apply to the openai backend only.
+export type Config = {backend: Backend; model?: string; effort?: string; baseUrl?: string; apiKey?: string};
+
+const SETTING_KEYS = ['model', 'effort', 'baseUrl', 'apiKey'] as const;
+type BackendSettings = Partial<Record<(typeof SETTING_KEYS)[number], string>>;
 type ConfigFile = {backend?: Backend} & Partial<Record<Backend, BackendSettings>>;
 
 const DEFAULT_BACKEND: Backend = 'claude';
-const DEFAULT_MODELS: Record<Backend, string> = {claude: 'haiku', codex: 'gpt-6-luna'};
+const DEFAULT_MODELS: Record<Backend, string> = {claude: 'haiku', codex: 'gpt-6-luna', openai: 'gpt-6-luna'};
+const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
 export const CONFIG_PATH = join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'purfect', 'config.json');
 
@@ -34,6 +40,10 @@ export function loadConfig(): Config {
 		backend,
 		model: process.env.PURFECT_MODEL || settings.model || DEFAULT_MODELS[backend],
 		effort,
+		...(backend === 'openai' && {
+			baseUrl: process.env.PURFECT_BASE_URL || settings.baseUrl || DEFAULT_OPENAI_BASE_URL,
+			apiKey: process.env.PURFECT_API_KEY || settings.apiKey || process.env.OPENAI_API_KEY,
+		}),
 	};
 }
 
@@ -57,12 +67,13 @@ function readConfigFile(): ConfigFile {
 		const section = data[backend];
 		if (section === undefined) continue;
 		if (!isObject(section)) throw new Error(`"${backend}" in ${CONFIG_PATH} must be an object`);
-		for (const key of ['model', 'effort'] as const) {
-			if (section[key] !== undefined && typeof section[key] !== 'string') {
-				throw new Error(`"${backend}.${key}" in ${CONFIG_PATH} must be a string`);
-			}
+		const settings: BackendSettings = {};
+		for (const key of SETTING_KEYS) {
+			if (section[key] === undefined) continue;
+			if (typeof section[key] !== 'string') throw new Error(`"${backend}.${key}" in ${CONFIG_PATH} must be a string`);
+			settings[key] = section[key];
 		}
-		result[backend] = {model: section.model as string | undefined, effort: section.effort as string | undefined};
+		result[backend] = settings;
 	}
 	return result;
 }
@@ -80,7 +91,7 @@ function detectHostCli(): Backend | undefined {
 	for (let pid = process.ppid, depth = 0; pid > 1 && depth < 10; depth++) {
 		const proc = processes.get(pid);
 		if (!proc) break;
-		if ((BACKENDS as readonly string[]).includes(proc.name)) return proc.name as Backend;
+		if ((HOST_CLIS as readonly string[]).includes(proc.name)) return proc.name as Backend;
 		pid = proc.ppid;
 	}
 	return undefined;

@@ -11,7 +11,8 @@ export type Usage = {
 	inputTokens: number;
 	outputTokens: number;
 	thinkingTokens: number;
-	// List-price estimate: reported by Claude, computed from CODEX_PRICES for Codex; unknown models get none.
+	// List-price estimate: reported by Claude, computed from OPENAI_PRICES for Codex and OpenAI-compatible
+	// endpoints; unknown models get none.
 	costUsd?: number;
 	durationMs: number;
 };
@@ -54,7 +55,9 @@ Reply with JSON only, no code fence:
    "keywords": [{"original": "<user's words>", "term": "<English>", "meaning": "<Vietnamese>", "why": "<Vietnamese>"}]}}`;
 
 export function rewrite(draft: string, config: Config, signal: AbortSignal): Promise<Rewrite> {
-	return config.backend === 'codex' ? rewriteWithCodex(draft, config, signal) : rewriteWithClaude(draft, config, signal);
+	if (config.backend === 'codex') return rewriteWithCodex(draft, config, signal);
+	if (config.backend === 'openai') return rewriteWithOpenAI(draft, config, signal);
+	return rewriteWithClaude(draft, config, signal);
 }
 
 // Headless Claude Code reuses the user's existing login; no API key needed.
@@ -80,6 +83,51 @@ async function rewriteWithCodex(draft: string, {model, effort}: Config, signal: 
 	const started = Date.now();
 	const stdout = await run('codex', args, draft, signal);
 	return parseCodexEvents(stdout, model ?? 'codex default', Date.now() - started);
+}
+
+type ChatCompletion = {
+	choices?: {message?: {content?: string | null}}[];
+	usage?: {prompt_tokens?: number; completion_tokens?: number; completion_tokens_details?: {reasoning_tokens?: number}; prompt_tokens_details?: {cached_tokens?: number}};
+	error?: {message?: string};
+};
+
+// Any OpenAI-compatible /chat/completions endpoint (OpenAI, OpenRouter, Ollama, LM Studio, vLLM, …).
+// JSON mode is not requested because not every server supports it; parse() handles stray text.
+async function rewriteWithOpenAI(draft: string, {model, effort, baseUrl, apiKey}: Config, signal: AbortSignal): Promise<Rewrite> {
+	const started = Date.now();
+	const response = await fetch(`${baseUrl!.replace(/\/+$/, '')}/chat/completions`, {
+		method: 'POST',
+		signal,
+		headers: {'Content-Type': 'application/json', ...(apiKey && {Authorization: `Bearer ${apiKey}`})},
+		body: JSON.stringify({
+			model,
+			messages: [
+				{role: 'system', content: SYSTEM_PROMPT},
+				{role: 'user', content: draft},
+			],
+			...(effort && {reasoning_effort: effort}),
+		}),
+	});
+	const text = await response.text();
+	let body: ChatCompletion;
+	try {
+		body = JSON.parse(text) as ChatCompletion;
+	} catch {
+		throw new Error(`${baseUrl} returned HTTP ${response.status}: ${text.slice(0, 200)}`);
+	}
+	if (!response.ok) throw new Error(body.error?.message || `${baseUrl} returned HTTP ${response.status}`);
+	const reply = body.choices?.[0]?.message?.content;
+	if (!reply) throw new Error(`${baseUrl} returned no reply`);
+	const u = body.usage;
+	const usage: Usage | undefined = u && {
+		model: model!,
+		inputTokens: u.prompt_tokens ?? 0,
+		outputTokens: u.completion_tokens ?? 0,
+		thinkingTokens: u.completion_tokens_details?.reasoning_tokens ?? 0,
+		costUsd: openaiCost(model!, u.prompt_tokens ?? 0, u.prompt_tokens_details?.cached_tokens ?? 0, u.completion_tokens ?? 0),
+		durationMs: Date.now() - started,
+	};
+	return {...parse(reply), usage};
 }
 
 // Features that add tool definitions a rewrite never uses; turning them off cuts input from
@@ -194,8 +242,9 @@ type CodexEvent =
 
 // USD per 1M tokens, standard short-context (<=272K input) tier, from
 // https://developers.openai.com/api/docs/pricing (checked 2026-10-30). On a ChatGPT login Codex
-// usage counts against plan limits instead, so this is a comparison figure, not a bill.
-const CODEX_PRICES: Record<string, {input: number; cachedInput: number; output: number}> = {
+// usage counts against plan limits instead, so this is a comparison figure, not a bill. Other
+// OpenAI-compatible providers price differently, so only these exact OpenAI model ids get a cost.
+const OPENAI_PRICES: Record<string, {input: number; cachedInput: number; output: number}> = {
 	'gpt-6.1-sol': {input: 2, cachedInput: 0.1, output: 10},
 	'gpt-6-sol': {input: 2, cachedInput: 0.2, output: 10},
 	'gpt-6-luna': {input: 0.1, cachedInput: 0.01, output: 0.5},
@@ -204,8 +253,8 @@ const CODEX_PRICES: Record<string, {input: number; cachedInput: number; output: 
 };
 
 // input_tokens includes cached_input_tokens; output_tokens includes reasoning tokens.
-function codexCost(model: string, input: number, cached: number, output: number): number | undefined {
-	const price = CODEX_PRICES[model];
+function openaiCost(model: string, input: number, cached: number, output: number): number | undefined {
+	const price = OPENAI_PRICES[model];
 	if (!price) return undefined;
 	return ((input - cached) * price.input + cached * price.cachedInput + output * price.output) / 1_000_000;
 }
@@ -226,7 +275,7 @@ function parseCodexEvents(stdout: string, model: string, durationMs: number): Re
 				inputTokens: u.input_tokens,
 				outputTokens: u.output_tokens,
 				thinkingTokens: u.reasoning_output_tokens ?? 0,
-				costUsd: codexCost(model, u.input_tokens, u.cached_input_tokens ?? 0, u.output_tokens),
+				costUsd: openaiCost(model, u.input_tokens, u.cached_input_tokens ?? 0, u.output_tokens),
 				durationMs,
 			};
 		} else if (event.type === 'turn.failed' && 'error' in event) {

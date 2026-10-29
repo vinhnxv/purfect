@@ -5,7 +5,8 @@ Claude Code / Codex CLI, with a short Vietnamese explanation of the key verbs an
 Review, edit, then approve.
 
 Rewriting runs through headless Claude Code (`claude -p`) or Codex (`codex exec`), so it uses
-your existing login; no API key needed. Requires Node 22+.
+your existing login; no API key needed. It can also call any OpenAI-compatible API (OpenAI,
+OpenRouter, Ollama, LM Studio, …). Requires Node 22+.
 
 ## Usage
 
@@ -44,9 +45,11 @@ Optional file `~/.config/purfect/config.json` (or `$XDG_CONFIG_HOME/purfect/conf
 
 | Setting                  | Env var           | Default                                    |
 | ------------------------ | ----------------- | ------------------------------------------ |
-| `backend`                | `PURFECT_BACKEND` | the CLI that launched purfect, else `claude` |
-| `<backend>.model`        | `PURFECT_MODEL`   | `haiku` for claude, `gpt-6-luna` for codex |
-| `<backend>.effort`       | `PURFECT_EFFORT`  | the backend CLI's default                  |
+| `backend`                | `PURFECT_BACKEND`  | the CLI that launched purfect, else `claude` |
+| `<backend>.model`        | `PURFECT_MODEL`    | `haiku` for claude, `gpt-6-luna` for codex and openai |
+| `<backend>.effort`       | `PURFECT_EFFORT`   | the backend's default                      |
+| `openai.baseUrl`         | `PURFECT_BASE_URL` | `https://api.openai.com/v1`                |
+| `openai.apiKey`          | `PURFECT_API_KEY`  | `OPENAI_API_KEY`                           |
 
 Env vars win over the file and apply to the active backend. Without `backend`, purfect uses the
 CLI it was launched from (Claude Code → claude, Codex → codex). Set `backend` or `PURFECT_BACKEND`
@@ -54,13 +57,17 @@ to force one, e.g. rewrite with Codex while in Claude Code. Detection walks up t
 to the nearest `claude` or `codex` process (macOS/Linux `ps`).
 
 - Claude backend: `claude -p`, no tools, user settings skipped.
+- OpenAI backend (`backend: "openai"`): one `POST {baseUrl}/chat/completions` call, no tools.
+  It is never auto-detected; set `backend` or `PURFECT_BACKEND=openai`. The key must match the
+  provider, and model ids follow the provider's naming (e.g. `openai/gpt-6-luna` on OpenRouter).
+  Keep the key in env vars, or `chmod 600` the config file if you put it there.
 - Codex backend: `codex exec` in a read-only sandbox from the temp dir, session not saved. Codex
   always sends its own instructions and core tools; purfect turns off unused features (browser,
   plugins, multi-agent, …), which brings input from ~18k down to ~12.6k tokens per rewrite.
 
 The review screen shows tokens and an estimated cost per rewrite: Claude reports its own,
-Codex is computed from a price table in `src/rewrite.ts` (OpenAI standard API prices; models
-not in the table show no cost). On a Claude or ChatGPT subscription these are list-price
+Codex and the OpenAI backend are computed from a price table in `src/rewrite.ts` (OpenAI standard
+API prices; models not in the table, including provider-prefixed ids, show no cost). On a Claude or ChatGPT subscription these are list-price
 estimates for comparison; usage counts against your plan limits instead. Typical rewrite:
 Haiku ~$0.0005, Luna ~$0.0015 (Codex sends ~13k input tokens vs ~1.2k for Claude).
 
