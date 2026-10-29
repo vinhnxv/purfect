@@ -31,6 +31,7 @@ let approved: string | undefined;
 const COMMANDS = [
 	{name: 'approve', desc: 'Duyệt prompt này và đóng (Enter trống cũng vậy)'},
 	{name: 'edit', desc: 'Tự sửa tay prompt tiếng Anh'},
+	{name: 'improve', desc: 'Gợi ý cải thiện prompt: rõ hơn, chỗ thiếu để [trống?] cho bạn điền'},
 	{name: 'history', desc: 'Xem mọi phiên bản đã chỉnh, chọn một bản để làm tiếp'},
 	{name: 'undo', desc: 'Về phiên bản liền trước'},
 	{name: 'redo', desc: 'Rewrite lại từ bản nháp gốc (thành một phiên bản mới)'},
@@ -50,7 +51,8 @@ function App() {
 	const [chat, setChat] = useState('');
 	const [chatKey, setChatKey] = useState(0); // remounting the input is how Tab moves its cursor to the end
 	const [pick, setPick] = useState(0);
-	const [refining, setRefining] = useState<string>(); // instruction being applied; unset for a plain rewrite
+	const [refining, setRefining] = useState<{instruction: string; improve?: boolean}>(); // unset for a plain rewrite
+	const [warnedFor, setWarnedFor] = useState<string>(); // prompt we already warned about unfilled placeholders
 	const [edited, setEdited] = useState('');
 	const [error, setError] = useState<string>();
 	const [notice, setNotice] = useState<string>();
@@ -77,10 +79,17 @@ function App() {
 	useEffect(() => {
 		if (stage !== 'rewriting') return;
 		const controller = new AbortController();
-		const refine: Refine | undefined = refining && result ? {current: result.prompt, instruction: refining} : undefined;
+		const refine: Refine | undefined = refining && result ? {current: result.prompt, ...refining} : undefined;
 		rewrite(draft, config, controller.signal, refine).then(
 			r => {
-				addVersion({result: r, label: refine ? refine.instruction : versions.length > 0 ? 'Rewrite lại' : 'Rewrite ban đầu'});
+				if (refine?.improve && (r.prompt === refine.current || r.tips?.length === 0)) {
+					setNotice('Prompt đã khá rõ, không có gì cần cải thiện thêm');
+				} else {
+					addVersion({
+						result: r,
+						label: refine?.improve ? 'Improve' : refine ? refine.instruction : versions.length > 0 ? 'Rewrite lại' : 'Rewrite ban đầu',
+					});
+				}
 				setError(undefined);
 				setStage('review');
 			},
@@ -97,7 +106,7 @@ function App() {
 
 	// Commands matching what is typed after "/", minus the ones that cannot run right now.
 	const available = (name: string) =>
-		name === 'undo' ? current > 0 : name === 'history' ? versions.length > 1 : name === 'approve' || name === 'edit' ? canUse : true;
+		name === 'undo' ? current > 0 : name === 'history' ? versions.length > 1 : name === 'approve' || name === 'edit' || name === 'improve' ? canUse : true;
 	const suggestions =
 		stage === 'review' && chat.startsWith('/') && !chat.includes(' ')
 			? COMMANDS.filter(c => c.name.startsWith(chat.slice(1).toLowerCase()) && available(c.name))
@@ -141,8 +150,16 @@ function App() {
 		if (!COMMANDS.some(c => c.name === command)) return setNotice(`Không có lệnh /${command}`);
 		if (!available(command)) return setNotice(`Lệnh /${command} chưa dùng được lúc này`);
 		if (command === 'approve') {
+			// Improve mode leaves "[...?]" placeholders; make approving them as-is a deliberate second step.
+			if (/\[[^\]\n]*\?\]/.test(result!.prompt) && warnedFor !== result!.prompt) {
+				setWarnedFor(result!.prompt);
+				return setNotice('Còn chỗ trống [...?] chưa điền. Trả lời trong khung chat để điền, hoặc duyệt lần nữa để giữ nguyên');
+			}
 			approved = result!.prompt;
 			exit();
+		} else if (command === 'improve') {
+			setRefining({instruction: 'improve', improve: true});
+			setStage('rewriting');
 		} else if (command === 'edit') {
 			setEdited(result!.prompt);
 			setStage('edit');
@@ -168,7 +185,7 @@ function App() {
 		if (text.startsWith('/')) return runCommand(selected ? selected.name : text.slice(1).trim().toLowerCase());
 		if (!text) return runCommand('approve');
 		if (!canUse) return;
-		setRefining(text);
+		setRefining({instruction: text});
 		setNotice(undefined);
 		setStage('rewriting');
 	};
@@ -199,7 +216,7 @@ function App() {
 					<Text color="green">
 						<Spinner type="dots" />
 					</Text>{' '}
-					{refining ? 'Đang chỉnh lại prompt…' : 'Đang rewrite sang tiếng Anh…'} (Esc để huỷ)
+					{refining?.improve ? 'Đang cải thiện prompt…' : refining ? 'Đang chỉnh lại prompt…' : 'Đang rewrite sang tiếng Anh…'} (Esc để huỷ)
 				</Text>
 			)}
 
@@ -212,7 +229,7 @@ function App() {
 					</Box>
 					{result.explanation && (
 						<Box flexDirection="column">
-							<Text bold>Giải thích</Text>
+							<Text bold>Language tutor</Text>
 							{result.explanation.meaning && <Text>Nghĩa: {result.explanation.meaning}</Text>}
 							{result.explanation.structure && <Text>Cấu trúc: {result.explanation.structure}</Text>}
 							{result.explanation.keywords.map(k => (
@@ -223,6 +240,18 @@ function App() {
 									{k.why && <Text dimColor>  {k.why}</Text>}
 								</Box>
 							))}
+						</Box>
+					)}
+					{result.tips && (
+						<Box flexDirection="column">
+							<Text bold color="yellow">
+								Prompt tutor
+							</Text>
+							{result.tips.length === 0 ? (
+								<Text dimColor>Prompt đã rõ ràng, agent có đủ thông tin để làm ✓</Text>
+							) : (
+								result.tips.map(t => <Text key={t}>• {t}</Text>)
+							)}
 						</Box>
 					)}
 				</Box>

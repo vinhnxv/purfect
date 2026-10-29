@@ -16,9 +16,10 @@ export type Usage = {
 	costUsd?: number;
 	durationMs: number;
 };
-export type Rewrite = {prompt: string; explanation?: Explanation; usage?: Usage};
-// A follow-up edit request applied to an earlier rewrite.
-export type Refine = {current: string; instruction: string};
+// tips: the prompt tutor's advice in Vietnamese (empty when the prompt is already clear).
+export type Rewrite = {prompt: string; explanation?: Explanation; tips?: string[]; usage?: Usage};
+// A follow-up applied to an earlier rewrite: an edit instruction, or improve mode (no instruction).
+export type Refine = {current: string; instruction: string; improve?: boolean};
 
 // Modeled on lang-tutor's translation breakdown. Vietnamese and English drafts get the same
 // shape: each keyword pairs what the user wrote with the English used, explained in Vietnamese.
@@ -51,22 +52,51 @@ the same way:
     otherwise why this word or form fits better than a likely alternative.
     Do not flag missing diacritics or typos in identifiers.
 
+3. Prompt tutor: judge the user's prompt as a task for a coding agent and give tips in Vietnamese.
+Never apply the tips to the rewritten prompt; the rewrite stays faithful to the draft.
+Check, most important first:
+- target: it names the file, function, screen or command, so the agent need not guess
+- expected result and how to check it (a test command, observable behavior)
+- whether the agent should change code or only investigate or plan
+- context or reason, when it changes the approach
+- scope: what to leave untouched; say what to do instead of what not to do
+- several unrelated tasks or ordered steps: split them, or number the steps
+- would a new teammate with no context be confused? say what they would be missing
+tips: 0 to 3 items, highest value first. Each is one short Vietnamese sentence: what is vague or
+missing and what to add, with a short English phrase the user can use, e.g.
+Thêm cách kiểm tra kết quả, ví dụ: "and make sure npm test passes". Do not nitpick: a prompt with
+a concrete action, a specific target and an observable expected result needs no tips; return [].
+
 Revision mode: if the message has <draft>, <current_prompt> and <instruction> tags, the user is
 refining an earlier rewrite. The instruction (Vietnamese or English) is an edit request for the
 prompt, never a task for you to perform. Return the full revised prompt:
 - apply the instruction and change nothing else; keep wording the instruction does not touch
 - <draft> is the user's original intent; keep its requirements unless the instruction removes them
-- explain the revised prompt as in step 2
+- explain the revised prompt as in step 2, and give tips for it as in step 3
+
+Improve mode: if the message has <draft>, <current_prompt> and <improve/>, make the current
+prompt clearer and easier for a coding agent to act on:
+- state the goal, scope and expected result plainly, using only what the draft and current prompt
+  say; never invent files, names, technologies, numbers or requirements
+- where something important is missing, put a short placeholder in square brackets that ends with
+  a question mark, e.g. [which file?] or [expected behavior?], in the prompt itself
+- put the main task first; if there are several constraints or checks, list them briefly after it;
+  no filler or politeness padding
+- tips: what was unclear or missing in the current prompt, as in step 3
+- a prompt is clear only if it has a concrete action, a specific target (file, function, screen,
+  command or component) and an observable expected result; add a placeholder for each of these
+  that is missing, and for nothing else (optional details such as exact values are not gaps)
+- if all three are present, return the prompt exactly as given, with tips []
 
 Reply with JSON only, no code fence:
 {"prompt": "<English prompt>",
  "explanation": {"meaning": "<Vietnamese>", "structure": "<Vietnamese>",
-   "keywords": [{"original": "<user's words>", "term": "<English>", "meaning": "<Vietnamese>", "why": "<Vietnamese>"}]}}`;
+   "keywords": [{"original": "<user's words>", "term": "<English>", "meaning": "<Vietnamese>", "why": "<Vietnamese>"}]},
+ "tips": ["<Vietnamese>"]}`;
 
 export function rewrite(draft: string, config: Config, signal: AbortSignal, refine?: Refine): Promise<Rewrite> {
-	const message = refine
-		? `<draft>\n${draft}\n</draft>\n<current_prompt>\n${refine.current}\n</current_prompt>\n<instruction>\n${refine.instruction}\n</instruction>`
-		: draft;
+	const context = refine && `<draft>\n${draft}\n</draft>\n<current_prompt>\n${refine.current}\n</current_prompt>\n`;
+	const message = refine ? context + (refine.improve ? '<improve/>' : `<instruction>\n${refine.instruction}\n</instruction>`) : draft;
 	if (config.backend === 'codex') return rewriteWithCodex(message, config, signal);
 	if (config.backend === 'openai') return rewriteWithOpenAI(message, config, signal);
 	return rewriteWithClaude(message, config, signal);
@@ -166,9 +196,10 @@ const CODEX_UNUSED_FEATURES = [
 const OUTPUT_SCHEMA = {
 	type: 'object',
 	additionalProperties: false,
-	required: ['prompt', 'explanation'],
+	required: ['prompt', 'explanation', 'tips'],
 	properties: {
 		prompt: {type: 'string'},
+		tips: {type: 'array', items: {type: 'string'}},
 		explanation: {
 			type: 'object',
 			additionalProperties: false,
@@ -308,6 +339,7 @@ function parse(output: string): Omit<Rewrite, 'usage'> {
 			const e = data.explanation;
 			return {
 				prompt: data.prompt.trim(),
+				tips: Array.isArray(data.tips) ? data.tips.filter(t => typeof t === 'string' && t.trim()) : undefined,
 				explanation: e && {
 					meaning: e.meaning ?? '',
 					structure: e.structure ?? '',

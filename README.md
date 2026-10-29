@@ -1,8 +1,15 @@
 # purfect
 
 Write a prompt in Vietnamese (or rough English), get it rewritten into clear English for
-Claude Code / Codex CLI, with a short Vietnamese explanation of the key verbs and phrases.
-Review, edit, then approve.
+Claude Code / Codex CLI. Two tutors sit under the result:
+
+- **Language tutor**: a short Vietnamese explanation of the key verbs and phrases, including
+  mistakes in your English.
+- **Prompt tutor**: tips on whether the prompt is clear enough for an agent to act on (target,
+  expected result and how to check it, scope, one task at a time) with an English phrase you can
+  add. A clear prompt gets no tips.
+
+Review, refine in the chat box, then approve.
 
 Rewriting runs through headless Claude Code (`claude -p`) or Codex (`codex exec`), so it uses
 your existing login; no API key needed. It can also call any OpenAI-compatible API (OpenAI,
@@ -73,6 +80,11 @@ Haiku ~$0.0005, Luna ~$0.0015 (Codex sends ~13k input tokens vs ~1.2k for Claude
 
 ## Rewrite rules
 
+The Prompt tutor's checks follow Anthropic's
+[prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices)
+(be clear and direct, give context, say what to do rather than what not to do, define how to
+verify). Its tips are advice only: they are never applied to the rewrite on their own.
+
 The rewrite stays faithful to the draft: no added or dropped meaning (time cues such as
 "lúc nãy" become "earlier"), vague references (this, that, above, the other file) stay vague,
 and verbs follow the intent ("sửa lại" is "fix", "sửa lại lần nữa" is "fix again"). Identifiers,
@@ -93,6 +105,7 @@ The chat box under the result is always on:
 | ---------- | ----------------------------------------------------- |
 | `/approve` | Approve this prompt and close                         |
 | `/edit`    | Edit the English prompt by hand                       |
+| `/improve` | Make the prompt clearer; gaps become `[...?]` to fill |
 | `/history` | List every version, pick one to continue from         |
 | `/undo`    | Go to the previous version                            |
 | `/redo`    | Rewrite again from the original draft (a new version) |
@@ -102,6 +115,11 @@ The chat box under the result is always on:
 Versions are append-only: every rewrite, refinement and manual edit adds one, and nothing is
 deleted. Picking an old version in `/history` only moves the pointer, so refining from it adds
 a new version at the end and all the others stay available.
+
+`/improve` never invents details: whatever is missing (action, specific target, expected result)
+becomes a placeholder such as `[which file?]`, and the Prompt tutor says what was unclear. Answer
+in the chat box to fill them. Approving a prompt that still has placeholders asks for a second
+`/approve`. A prompt that is already clear is left alone.
 
 Each refinement sends the original draft, the current prompt and your instruction, and returns
 the full revised prompt with a fresh explanation (same backend and cost as a rewrite).
