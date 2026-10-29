@@ -1,4 +1,5 @@
 import {spawn} from 'node:child_process';
+import type {Config} from './config.js';
 
 export type Keyword = {original: string; term: string; meaning: string; why: string};
 export type Explanation = {meaning: string; structure: string; keywords: Keyword[]};
@@ -43,12 +44,14 @@ Reply with JSON only, no code fence:
  "explanation": {"meaning": "<Vietnamese>", "structure": "<Vietnamese>",
    "keywords": [{"original": "<user's words>", "term": "<English>", "meaning": "<Vietnamese>", "why": "<Vietnamese>"}]}}`;
 
-export function rewrite(draft: string, model: string, signal: AbortSignal): Promise<Rewrite> {
+export function rewrite(draft: string, {model, effort}: Config, signal: AbortSignal): Promise<Rewrite> {
 	return new Promise((resolve, reject) => {
 		// Headless Claude Code reuses the user's existing login; no API key needed.
+		const args = ['-p', '--model', model, '--output-format', 'json', '--system-prompt', SYSTEM_PROMPT, '--tools', '', '--no-session-persistence', '--setting-sources', ''];
+		if (effort) args.push('--effort', effort);
 		const child = spawn(
 			'claude',
-			['-p', '--model', model, '--output-format', 'json', '--system-prompt', SYSTEM_PROMPT, '--tools', '', '--no-session-persistence', '--setting-sources', ''],
+			args,
 			{signal, stdio: ['pipe', 'pipe', 'pipe']},
 		);
 		let stdout = '';

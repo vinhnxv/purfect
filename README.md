@@ -24,12 +24,13 @@ draft in the prompt box, press `Ctrl+G`, approve with `a`, then press Enter to s
 Optional file `~/.config/purfect/config.json` (or `$XDG_CONFIG_HOME/purfect/config.json`):
 
 ```json
-{ "model": "haiku" }
+{ "model": "haiku", "effort": "low" }
 ```
 
 | Setting | Env var         | Default |
 | ------- | --------------- | ------- |
 | `model` | `PURFECT_MODEL` | `haiku` |
+| `effort` | `PURFECT_EFFORT` | model default (`low`, `medium`, `high`, `xhigh`, `max`) |
 
 Env vars win over the file. For per-project overrides, set them in the project's
 `.claude/settings.json` `env` block.

@@ -4,7 +4,7 @@ import {useEffect, useState} from 'react';
 import {Box, Text, render, useApp, useInput} from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
-import {loadConfig} from './config.js';
+import {loadConfig, type Config} from './config.js';
 import {rewrite, type Rewrite, type Usage} from './rewrite.js';
 
 type Stage = 'compose' | 'rewriting' | 'review' | 'edit';
@@ -14,14 +14,13 @@ type Stage = 'compose' | 'rewriting' | 'review' | 'edit';
 const file = process.argv[2];
 const initialDraft = file ? readFileSync(file, 'utf8').trim() : '';
 
-let config;
+let config: Config;
 try {
 	config = loadConfig();
 } catch (e) {
 	process.stderr.write(`purfect: ${(e as Error).message}\n`);
 	process.exit(1);
 }
-const {model} = config;
 
 let approved: string | undefined;
 
@@ -36,7 +35,7 @@ function App() {
 	useEffect(() => {
 		if (stage !== 'rewriting') return;
 		const controller = new AbortController();
-		rewrite(draft, model, controller.signal).then(
+		rewrite(draft, config, controller.signal).then(
 			r => {
 				setResult(r);
 				setError(undefined);

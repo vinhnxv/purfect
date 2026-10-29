@@ -2,7 +2,10 @@ import {readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {join} from 'node:path';
 
-export type Config = {model: string};
+export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type Effort = (typeof EFFORTS)[number];
+// effort is unset by default: claude then uses the model's own default.
+export type Config = {model: string; effort?: Effort};
 
 const DEFAULTS: Config = {model: 'haiku'};
 
@@ -14,6 +17,7 @@ export function loadConfig(): Config {
 	const file = readConfigFile();
 	return {
 		model: process.env.PURFECT_MODEL || file.model || DEFAULTS.model,
+		effort: checkEffort(process.env.PURFECT_EFFORT || undefined, 'PURFECT_EFFORT') ?? file.effort,
 	};
 }
 
@@ -34,9 +38,17 @@ function readConfigFile(): Partial<Config> {
 	if (typeof data !== 'object' || data === null || Array.isArray(data)) {
 		throw new Error(`${CONFIG_PATH} must contain a JSON object`);
 	}
-	const {model} = data as Record<string, unknown>;
+	const {model, effort} = data as Record<string, unknown>;
 	if (model !== undefined && typeof model !== 'string') {
 		throw new Error(`"model" in ${CONFIG_PATH} must be a string`);
 	}
-	return {model};
+	return {model, effort: checkEffort(effort, `"effort" in ${CONFIG_PATH}`)};
+}
+
+function checkEffort(value: unknown, source: string): Effort | undefined {
+	if (value === undefined) return undefined;
+	if (!EFFORTS.includes(value as Effort)) {
+		throw new Error(`${source} must be one of ${EFFORTS.join(', ')}`);
+	}
+	return value as Effort;
 }
