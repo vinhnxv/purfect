@@ -68,6 +68,7 @@ async function rewriteWithCodex(draft: string, {model, effort}: Config, signal: 
 	// JSON string literals are valid TOML basic strings, which is how -c parses values.
 	const args = ['exec', '--ephemeral', '--skip-git-repo-check', '-s', 'read-only', '-C', tmpdir(), '--json',
 		'--output-schema', schemaPath, '-c', `developer_instructions=${JSON.stringify(SYSTEM_PROMPT)}`];
+	for (const feature of CODEX_UNUSED_FEATURES) args.push('-c', `features.${feature}=false`);
 	if (model) args.push('-m', model);
 	if (effort) args.push('-c', `model_reasoning_effort=${JSON.stringify(effort)}`);
 	args.push('-');
@@ -75,6 +76,26 @@ async function rewriteWithCodex(draft: string, {model, effort}: Config, signal: 
 	const stdout = await run('codex', args, draft, signal);
 	return parseCodexEvents(stdout, model ?? 'codex default', Date.now() - started);
 }
+
+// Features that add tool definitions a rewrite never uses; turning them off cuts input from
+// ~18k to ~12.6k tokens (measured on codex-cli 0.165). Set through `-c` rather than `--disable`
+// because Codex only warns about unknown `-c` keys, so a renamed feature cannot break purfect.
+const CODEX_UNUSED_FEATURES = [
+	'apps',
+	'browser_use',
+	'browser_use_external',
+	'computer_use',
+	'goals',
+	'hooks',
+	'image_generation',
+	'in_app_browser',
+	'multi_agent',
+	'plugins',
+	'skill_search',
+	'sleep_tool',
+	'tool_suggest',
+	'view_image',
+];
 
 // Strict structured-output schema for Codex: every property required, no extras.
 const OUTPUT_SCHEMA = {

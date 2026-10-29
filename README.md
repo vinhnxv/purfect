@@ -52,7 +52,8 @@ to force one, e.g. rewrite with Codex while in Claude Code.
 
 - Claude backend: `claude -p`, no tools, user settings skipped.
 - Codex backend: `codex exec` in a read-only sandbox from the temp dir, session not saved. Codex
-  always sends its own instructions and tool definitions, so expect ~18k input tokens per rewrite.
+  always sends its own instructions and core tools; purfect turns off unused features (browser,
+  plugins, multi-agent, …), which brings input from ~18k down to ~12.6k tokens per rewrite.
 
 The review screen shows tokens and an estimated cost per rewrite. On a Claude subscription
 the cost is a list-price estimate; usage counts against your plan limits (`/usage`).
