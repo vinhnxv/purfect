@@ -175,8 +175,15 @@ Requirements: `ffmpeg` on the PATH (macOS: `brew install ffmpeg`), and permissio
 terminal app to use the microphone (macOS: System Settings → Privacy & Security → Microphone).
 The audio is sent to the provider, so voice stays off until you turn it on.
 
-The `openai` provider calls `/audio/transcriptions` with `gpt-transcribe` (listed at about
-$0.0045 per minute; purfect shows the cost after each use). Only macOS has been tested.
+Providers:
+
+- `openai` (default): `/audio/transcriptions` with `gpt-transcribe` (listed at about $0.0045 per
+  minute; purfect shows the cost after each use).
+- `dashscope`: Alibaba Cloud Model Studio, `qwen-audio-3.1-asr-flash`, which takes up to five
+  minutes of audio per request. No price is known to purfect, so no cost is shown. See
+  [DashScope](#dashscope) for the key and host.
+
+Only macOS has been tested.
 
 ### Adding a provider
 
@@ -235,11 +242,30 @@ is upper-cased with `-` as `_`, e.g. `PURFECT_SPEECH_OPENAI_REALTIME_API_KEY`):
   tokens in and $12 per 1M audio tokens out). OpenAI has announced that this model shuts down on
   2027-01-06 and points to the Realtime API instead, so use `openai-realtime` for anything lasting.
 
-Texts over 4096 characters are refused by both. The cost of a reading is not shown.
+- `dashscope`: Alibaba Cloud Model Studio, `qwen-audio-3.1-tts-plus`, voice `longanhuan_v3.1`
+  (the others for this model are `longanlingxin_v3.1`, `xunanchuan_v3.1` and `longanfengyue_v3.1`),
+  over its WebSocket. Listed at $0.30 per 10,000 characters (Singapore). See [DashScope](#dashscope)
+  for the key and host.
+
+Texts over 4096 characters (2000 for `dashscope`) are refused. The cost of a reading is not shown.
 
 The last finished reading is kept in memory, so `/speak` on the same text, provider, model and
 voice plays again at once and costs nothing; reading a different text replaces it. Nothing is
 written to disk, and the clip is gone when purfect exits.
+
+### DashScope
+
+The `dashscope` provider for voice input and for reading aloud is set up the way Alibaba's own
+tools are, from two standard variables:
+
+| Variable             | Meaning                                                                                                   |
+| -------------------- | --------------------------------------------------------------------------------------------------------- |
+| `DASHSCOPE_API_KEY`  | The API key.                                                                                              |
+| `DASHSCOPE_API_HOST` | Your workspace host, e.g. `<workspace-id>.ap-southeast-1.maas.aliyuncs.com`. Without it, `dashscope-intl.aliyuncs.com`. |
+
+They are only fallbacks. `PURFECT_VOICE_DASHSCOPE_*` / `PURFECT_SPEECH_DASHSCOPE_*` and the
+`voice.providers.dashscope` / `speech.providers.dashscope` blocks win, so voice and speech can still
+use different keys. Select it with `"provider": "dashscope"` in the `voice` or `speech` block.
 
 ### Adding a speech provider
 
