@@ -194,6 +194,10 @@ Providers:
   `PURFECT_VOICE_AZURE_LANGUAGE`; the default is `en-US`, and Vietnamese is `vi-VN`. The service's
   documentation caps a request at 60 seconds, which is also the default `voice.maxSeconds`. No
   cost is shown. See [Azure AI Speech](#azure-ai-speech).
+- `soniox`: Soniox real-time STT (`stt-rt-v5`), streamed over a WebSocket like `speechmatics`, so
+  the words appear while you speak. It detects the language by itself (Vietnamese and English were
+  both recognised with no setting); `voice.providers.soniox.language` is only an optional hint.
+  No price is known to purfect, so no cost is shown. See [Soniox](#soniox).
 
 Only macOS has been tested.
 
@@ -267,8 +271,12 @@ is upper-cased with `-` as `_`, e.g. `PURFECT_SPEECH_OPENAI_REALTIME_API_KEY`):
   the target language whatever it is (tried with English and Vietnamese). A voice built for one
   language, such as `vi-VN-HoaiMyNeural`, reads only that language, so set `speech.providers.azure.voice`
   (or `PURFECT_SPEECH_AZURE_VOICE`) to match your target. See [Azure AI Speech](#azure-ai-speech).
+- `soniox`: Soniox text to speech (`tts-rt-v2`), voice `Adrian`. All of its 200 voices read all of its
+  63 languages, which include every target language purfect offers; purfect tells the service the
+  target language of the text. The service cuts a request's audio at two minutes, so texts over
+  1500 characters are refused. See [Soniox](#soniox).
 
-Texts over 4096 characters (2000 for `dashscope`) are refused. The cost of a reading is not shown.
+Texts over 4096 characters (2000 for `dashscope`, 1500 for `soniox`) are refused. The cost of a reading is not shown.
 
 The last finished reading is kept in memory, so `/speak` on the same text, provider, model and
 voice plays again at once and costs nothing; reading a different text replaces it. Nothing is
@@ -317,6 +325,20 @@ and the `voice.providers.azure` / `speech.providers.azure` blocks win, so voice 
 use different keys. Select it with `"provider": "azure"` in the `voice` or `speech` block. The
 free (F0) tier limits how often requests may be made; the service then answers with HTTP 429 and
 purfect shows its message.
+
+### Soniox
+
+The `soniox` provider for voice input and for reading aloud reads one standard variable:
+
+| Variable          | Meaning      |
+| ----------------- | ------------ |
+| `SONIOX_API_KEY`  | The API key. |
+
+It is only a fallback. `PURFECT_VOICE_SONIOX_API_KEY` / `PURFECT_SPEECH_SONIOX_API_KEY` and the
+`voice.providers.soniox` / `speech.providers.soniox` blocks win, so voice and speech can still use
+different keys. Select it with `"provider": "soniox"` in the `voice` or `speech` block. Pick another
+voice with `speech.providers.soniox.voice` (or `PURFECT_SPEECH_SONIOX_VOICE`); the names are in the
+Soniox console and in `GET https://api.soniox.com/v1/tts-models`.
 
 ### Adding a speech provider
 

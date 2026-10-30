@@ -26,8 +26,8 @@ export async function streamHttpAudio({url, headers, body, signal}: Options, onA
 	}
 	if (!res.ok) {
 		// Error bodies are JSON from most services and an HTML page from some gateways.
-		const error = (await res.json().catch(() => ({}))) as {error?: {message?: string}; message?: string; detail?: string};
-		throw new Error(`HTTP ${res.status}: ${error.error?.message ?? error.message ?? error.detail ?? res.statusText}`);
+		const error = (await res.json().catch(() => ({}))) as {error?: {message?: string}; error_message?: string; message?: string; detail?: string};
+		throw new Error(`HTTP ${res.status}: ${error.error?.message ?? error.error_message ?? error.message ?? error.detail ?? res.statusText}`);
 	}
 	const reader = res.body!.getReader();
 	for (;;) {

@@ -296,7 +296,7 @@ function App() {
 			if (!speech?.enabled) return setNotice(speechProblem ?? msgs.speech.off);
 			const fail = (e: Error) => setNotice(e instanceof TooLongError ? msgs.speech.tooLong(e.length, e.max) : msgs.speech.error(e.message));
 			try {
-				speaking.speak(result!.prompt, fail);
+				speaking.speak(result!.prompt, cfg.targetLanguage, fail);
 			} catch (e) {
 				fail(e as Error);
 			}

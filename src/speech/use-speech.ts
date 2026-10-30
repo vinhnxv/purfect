@@ -18,10 +18,10 @@ export function useSpeech(speech: SpeechConfig | undefined) {
 	};
 
 	// Throws when the provider cannot be set up or the text is too long, before anything is requested.
-	const speak = (text: string, onError: (error: Error) => void) => {
+	const speak = (text: string, language: string, onError: (error: Error) => void) => {
 		stop();
 		const mine = run.current;
-		const active = startSpeaking(speech!, text, () => {
+		const active = startSpeaking({...speech!, settings: {...speech!.settings, language}}, text, () => {
 			if (run.current === mine) setPhase('speaking');
 		});
 		session.current = active;

@@ -1,4 +1,6 @@
-export type SpeechSettings = {apiKey?: string; baseUrl?: string; model?: string; voice?: string};
+// `language` is the language of the text to read. The app sets it from the target language when it
+// speaks; it is not a config-file setting. Only providers that must be told the language use it.
+export type SpeechSettings = {apiKey?: string; baseUrl?: string; model?: string; voice?: string; language?: string};
 
 // A text-to-speech engine. It hands the audio over as it arrives, so a service that returns the whole
 // clip in one response (one call) and one that streams it (many calls, or a WebSocket) look the same

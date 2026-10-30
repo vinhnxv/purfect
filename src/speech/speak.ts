@@ -28,7 +28,7 @@ export function startSpeaking(speech: SpeechConfig, text: string, onPlaying: () 
 	const synthesizer = SYNTHESIZERS[speech.provider]!.create(speech.settings);
 	if (text.length > synthesizer.maxChars) throw new TooLongError(text.length, synthesizer.maxChars);
 
-	const key = JSON.stringify([speech.provider, speech.settings.baseUrl, speech.settings.model, speech.settings.voice, text]);
+	const key = JSON.stringify([speech.provider, speech.settings.baseUrl, speech.settings.model, speech.settings.voice, speech.settings.language, text]);
 	const cached = last?.key === key ? last.chunks : undefined;
 
 	const controller = new AbortController();
