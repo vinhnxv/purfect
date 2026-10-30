@@ -40,6 +40,20 @@ Set `EDITOR` to `bin/purfect.js` (e.g. in a project's `.claude/settings.json` `e
 draft in the prompt box, press `Ctrl+G` (or `Ctrl+X Ctrl+E` in terminals such as Warp that
 take `Ctrl+G`), approve with `a`, then press Enter to send.
 
+### In Warp
+
+Warp binds `Ctrl+G` to its own [Rich Input](https://docs.warp.dev/agent-platform/cli-agents/rich-input/)
+editor whenever it detects Claude Code or Codex, so the key never reaches the agent and purfect
+does not open. Pick one:
+
+- Change Warp's Rich Input shortcut in **Settings > Agents > Third party CLI agents**, so that
+  `Ctrl+G` reaches the agent again. Turning off only the Rich Input button or its auto-open may
+  not free the key.
+- In Claude Code, press `Ctrl+X Ctrl+E` instead; it opens the same external editor. Codex has no
+  such alternative, so use the first option there.
+
+Text typed in Rich Input is sent to the agent as it is. It does not pass through purfect.
+
 ## Settings
 
 Optional file `~/.config/purfect/config.json` (or `$XDG_CONFIG_HOME/purfect/config.json`):
