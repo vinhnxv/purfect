@@ -170,7 +170,7 @@ its own `PURFECT_VOICE_*` variables, its own key and endpoint. Nothing is shared
 | `voice.providers.<id>.apiKey`  | `PURFECT_VOICE_<ID>_API_KEY`    | none                          |
 | `voice.providers.<id>.baseUrl` | `PURFECT_VOICE_<ID>_BASE_URL`   | the provider's own            |
 | `voice.providers.<id>.model`   | `PURFECT_VOICE_<ID>_MODEL`      | the provider's own            |
-| `voice.providers.<id>.language` | `PURFECT_VOICE_<ID>_LANGUAGE`  | the provider's own (only `speechmatics` needs one) |
+| `voice.providers.<id>.language` | `PURFECT_VOICE_<ID>_LANGUAGE`  | the provider's own (`speechmatics` and `azure` need one) |
 
 Requirements: `ffmpeg` on the PATH (macOS: `brew install ffmpeg`), and permission for your
 terminal app to use the microphone (macOS: System Settings → Privacy & Security → Microphone).
@@ -189,6 +189,11 @@ Providers:
   `PURFECT_VOICE_SPEECHMATICS_LANGUAGE`; the default is `en`. Other codes the service accepted when
   tried include `vi`, `fr`, `de`, `es`, `ja`, `ko`, `pt`, `it` and `cmn` (Mandarin; `zh` is
   rejected). No price is known to purfect, so no cost is shown. See [Speechmatics](#speechmatics).
+- `azure`: Azure AI Speech recognition of short audio, one request after you stop. It needs a
+  locale up front (there is no automatic detection): set `voice.providers.azure.language` or
+  `PURFECT_VOICE_AZURE_LANGUAGE`; the default is `en-US`, and Vietnamese is `vi-VN`. The service's
+  documentation caps a request at 60 seconds, which is also the default `voice.maxSeconds`. No
+  cost is shown. See [Azure AI Speech](#azure-ai-speech).
 
 Only macOS has been tested.
 
@@ -258,6 +263,10 @@ is upper-cased with `-` as `_`, e.g. `PURFECT_SPEECH_OPENAI_REALTIME_API_KEY`):
   `megan`, `jack` (US). It has **English voices only**, so `/speak` is hidden, and says why when
   typed, while the target language is not English. An unknown voice name is not an error: the
   service falls back to a default voice. See [Speechmatics](#speechmatics).
+- `azure`: Azure AI Speech text to speech, default voice `en-US-AvaMultilingualNeural`, which reads
+  the target language whatever it is (tried with English and Vietnamese). A voice built for one
+  language, such as `vi-VN-HoaiMyNeural`, reads only that language, so set `speech.providers.azure.voice`
+  (or `PURFECT_SPEECH_AZURE_VOICE`) to match your target. See [Azure AI Speech](#azure-ai-speech).
 
 Texts over 4096 characters (2000 for `dashscope`) are refused. The cost of a reading is not shown.
 
@@ -293,6 +302,21 @@ can still use different keys. Select it with `"provider": "speechmatics"` in the
 block. Its default hosts are `global.rt.speechmatics.com` (speech to text, which routes to the
 nearest region; pin one with `baseUrl`, e.g. `https://eu.rt.speechmatics.com`) and
 `preview.tts.speechmatics.com` (text to speech).
+
+### Azure AI Speech
+
+The `azure` provider for voice input and for reading aloud is set up from two variables:
+
+| Variable                | Meaning                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------- |
+| `AZURE_SPEECH_KEY`      | The key of the Speech resource.                                                          |
+| `AZURE_SPEECH_ENDPOINT` | The resource's endpoint, e.g. `https://<name>.api.cognitive.microsoft.com/` (Keys and Endpoint in the Azure portal). |
+
+They are only fallbacks. `PURFECT_VOICE_AZURE_*` / `PURFECT_SPEECH_AZURE_*` (`_API_KEY`, `_BASE_URL`)
+and the `voice.providers.azure` / `speech.providers.azure` blocks win, so voice and speech can still
+use different keys. Select it with `"provider": "azure"` in the `voice` or `speech` block. The
+free (F0) tier limits how often requests may be made; the service then answers with HTTP 429 and
+purfect shows its message.
 
 ### Adding a speech provider
 
