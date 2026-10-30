@@ -16,6 +16,10 @@ Rewriting runs through headless Claude Code (`claude -p`) or Codex (`codex exec`
 your existing login; no API key needed. It can also call any OpenAI-compatible API (OpenAI,
 OpenRouter, Ollama, LM Studio, …). Requires Node 22+.
 
+> **Platform support:** purfect has only been tested on macOS. It may work on Linux and Windows,
+> but neither has been tested. Detecting which CLI launched purfect relies on `ps`, so on
+> Windows set `backend` (or `PURFECT_BACKEND`) explicitly.
+
 ## Usage
 
 ```sh
