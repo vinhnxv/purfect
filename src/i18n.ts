@@ -1,7 +1,7 @@
 import type {DisplayCode, SettingKey} from './config.js';
 
 // Slash commands of the review chat box, in the order they are suggested.
-export const COMMAND_NAMES = ['approve', 'edit', 'ide', 'improve', 'voice', 'history', 'undo', 'redo', 'back', 'tutor', 'config', 'quit'] as const;
+export const COMMAND_NAMES = ['approve', 'edit', 'ide', 'ipa', 'improve', 'voice', 'history', 'undo', 'redo', 'back', 'tutor', 'config', 'quit'] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 // Every string the interface shows. The model's own output (explanations, tips) is not here:
@@ -31,6 +31,7 @@ export type Messages = {
 	historyTitle: string;
 	inUse: string;
 	editTitle: string;
+	ipa: {title: string; working: string; unsupported: (language: string) => string};
 	ide: {
 		waiting: (name: string) => string;
 		unchanged: string;
@@ -64,6 +65,7 @@ const en: Messages = {
 		approve: 'Approve this prompt and close (an empty Enter does the same)',
 		edit: 'Edit the rewritten prompt by hand',
 		ide: 'Edit the rewritten prompt in your IDE (VS Code, Cursor, …)',
+		ipa: 'Show the IPA pronunciation of this prompt',
 		improve: 'Suggest improvements: clearer, with [blanks?] for you to fill in',
 		voice: 'Speak an instruction instead of typing it (needs voice input on)',
 		history: 'See every version, pick one to continue from',
@@ -101,6 +103,7 @@ const en: Messages = {
 	historyTitle: 'Version history — ↑↓ select · Enter to continue from this version · Esc to cancel',
 	inUse: ' (current)',
 	editTitle: 'Edit — Enter to save, Esc to cancel',
+	ipa: {title: 'IPA pronunciation', working: 'Writing the IPA…', unsupported: language => `IPA is not available for ${language}`},
 	ide: {
 		waiting: name => `Editing in ${name}… save and close the file to come back (Esc to cancel)`,
 		unchanged: 'No changes made, keeping the current version',
@@ -134,6 +137,7 @@ const vi: Messages = {
 		approve: 'Duyệt prompt này và đóng (Enter trống cũng vậy)',
 		edit: 'Tự sửa tay prompt đã rewrite',
 		ide: 'Sửa prompt đã rewrite trong IDE (VS Code, Cursor, …)',
+		ipa: 'Hiện phiên âm IPA của prompt này',
 		improve: 'Gợi ý cải thiện prompt: rõ hơn, chỗ thiếu để [trống?] cho bạn điền',
 		voice: 'Nói chỉ dẫn thay vì gõ (cần bật nhập bằng giọng nói)',
 		history: 'Xem mọi phiên bản đã chỉnh, chọn một bản để làm tiếp',
@@ -171,6 +175,7 @@ const vi: Messages = {
 	historyTitle: 'Lịch sử phiên bản — ↑↓ chọn · Enter dùng bản này để làm tiếp · Esc huỷ',
 	inUse: ' (đang dùng)',
 	editTitle: 'Chỉnh sửa — Enter để lưu, Esc để huỷ',
+	ipa: {title: 'Phiên âm IPA', working: 'Đang viết phiên âm IPA…', unsupported: language => `Chưa hỗ trợ IPA cho ${language}`},
 	ide: {
 		waiting: name => `Đang sửa trong ${name}… lưu và đóng file để quay lại (Esc để huỷ)`,
 		unchanged: 'Không có thay đổi, giữ nguyên phiên bản hiện tại',
@@ -204,6 +209,7 @@ const fr: Messages = {
 		approve: 'Valider ce prompt et fermer (Entrée vide aussi)',
 		edit: 'Modifier à la main le prompt réécrit',
 		ide: 'Modifier le prompt réécrit dans votre IDE (VS Code, Cursor, …)',
+		ipa: 'Afficher la prononciation API (IPA) de ce prompt',
 		improve: 'Suggérer des améliorations : plus clair, avec des [blancs ?] à remplir',
 		voice: 'Dicter une consigne au lieu de la taper (saisie vocale à activer)',
 		history: 'Voir toutes les versions, en choisir une pour continuer',
@@ -241,6 +247,7 @@ const fr: Messages = {
 	historyTitle: 'Historique des versions — ↑↓ choisir · Entrée pour continuer depuis cette version · Échap annuler',
 	inUse: ' (en cours)',
 	editTitle: 'Modifier — Entrée pour enregistrer, Échap pour annuler',
+	ipa: {title: 'Prononciation API (IPA)', working: 'Transcription phonétique en cours…', unsupported: language => `L'API (IPA) n'est pas disponible pour ${language}`},
 	ide: {
 		waiting: name => `Modification dans ${name}… enregistrez et fermez le fichier pour revenir (Échap pour annuler)`,
 		unchanged: 'Aucune modification, la version actuelle est conservée',
@@ -274,6 +281,7 @@ const de: Messages = {
 		approve: 'Diesen Prompt übernehmen und schließen (leeres Enter geht auch)',
 		edit: 'Den umgeschriebenen Prompt von Hand bearbeiten',
 		ide: 'Den umgeschriebenen Prompt in Ihrer IDE bearbeiten (VS Code, Cursor, …)',
+		ipa: 'IPA-Aussprache dieses Prompts anzeigen',
 		improve: 'Verbesserungen vorschlagen: klarer, mit [Lücken?] zum Ausfüllen',
 		voice: 'Eine Anweisung sprechen statt tippen (Spracheingabe muss aktiv sein)',
 		history: 'Alle Versionen ansehen, eine zum Weitermachen wählen',
@@ -311,6 +319,7 @@ const de: Messages = {
 	historyTitle: 'Versionsverlauf — ↑↓ wählen · Enter: mit dieser Version weitermachen · Esc abbrechen',
 	inUse: ' (aktuell)',
 	editTitle: 'Bearbeiten — Enter zum Speichern, Esc zum Abbrechen',
+	ipa: {title: 'IPA-Aussprache', working: 'IPA-Lautschrift wird erstellt…', unsupported: language => `IPA ist für ${language} nicht verfügbar`},
 	ide: {
 		waiting: name => `Bearbeitung in ${name}… Datei speichern und schließen, um zurückzukehren (Esc zum Abbrechen)`,
 		unchanged: 'Keine Änderungen, die aktuelle Version bleibt erhalten',
@@ -344,6 +353,7 @@ const it: Messages = {
 		approve: 'Approva questo prompt e chiudi (anche Invio vuoto)',
 		edit: 'Modifica a mano il prompt riscritto',
 		ide: 'Modifica il prompt riscritto nel tuo IDE (VS Code, Cursor, …)',
+		ipa: 'Mostra la pronuncia IPA di questo prompt',
 		improve: 'Suggerisci miglioramenti: più chiaro, con [vuoti?] da riempire',
 		voice: 'Dettare un\'istruzione invece di scriverla (serve l\'input vocale attivo)',
 		history: 'Vedi tutte le versioni, scegline una da cui continuare',
@@ -381,6 +391,7 @@ const it: Messages = {
 	historyTitle: 'Cronologia versioni — ↑↓ scegli · Invio per continuare da questa versione · Esc annulla',
 	inUse: ' (in uso)',
 	editTitle: 'Modifica — Invio per salvare, Esc per annullare',
+	ipa: {title: 'Pronuncia IPA', working: 'Scrittura della trascrizione IPA…', unsupported: language => `IPA non è disponibile per ${language}`},
 	ide: {
 		waiting: name => `Modifica in ${name}… salva e chiudi il file per tornare (Esc per annullare)`,
 		unchanged: 'Nessuna modifica, resta la versione attuale',
@@ -414,6 +425,7 @@ const es: Messages = {
 		approve: 'Aprobar este prompt y cerrar (Enter vacío también)',
 		edit: 'Editar a mano el prompt reescrito',
 		ide: 'Editar el prompt reescrito en tu IDE (VS Code, Cursor, …)',
+		ipa: 'Mostrar la pronunciación IPA de este prompt',
 		improve: 'Sugerir mejoras: más claro, con [huecos?] por rellenar',
 		voice: 'Dictar una instrucción en lugar de escribirla (requiere la entrada de voz activada)',
 		history: 'Ver todas las versiones y elegir una para continuar',
@@ -451,6 +463,7 @@ const es: Messages = {
 	historyTitle: 'Historial de versiones — ↑↓ elegir · Enter para continuar desde esta versión · Esc cancelar',
 	inUse: ' (actual)',
 	editTitle: 'Editar — Enter para guardar, Esc para cancelar',
+	ipa: {title: 'Pronunciación IPA', working: 'Escribiendo la transcripción IPA…', unsupported: language => `IPA no está disponible para ${language}`},
 	ide: {
 		waiting: name => `Editando en ${name}… guarda y cierra el archivo para volver (Esc para cancelar)`,
 		unchanged: 'Sin cambios, se mantiene la versión actual',
@@ -484,6 +497,7 @@ const pt: Messages = {
 		approve: 'Aprovar este prompt e fechar (Enter vazio também)',
 		edit: 'Editar à mão o prompt reescrito',
 		ide: 'Editar o prompt reescrito na sua IDE (VS Code, Cursor, …)',
+		ipa: 'Mostrar a pronúncia IPA deste prompt',
 		improve: 'Sugerir melhorias: mais claro, com [lacunas?] para preencher',
 		voice: 'Ditar uma instrução em vez de digitar (requer a entrada de voz ativada)',
 		history: 'Ver todas as versões e escolher uma para continuar',
@@ -521,6 +535,7 @@ const pt: Messages = {
 	historyTitle: 'Histórico de versões — ↑↓ escolher · Enter para continuar desta versão · Esc cancelar',
 	inUse: ' (atual)',
 	editTitle: 'Editar — Enter para salvar, Esc para cancelar',
+	ipa: {title: 'Pronúncia IPA', working: 'Escrevendo a transcrição IPA…', unsupported: language => `IPA não está disponível para ${language}`},
 	ide: {
 		waiting: name => `Editando em ${name}… salve e feche o arquivo para voltar (Esc para cancelar)`,
 		unchanged: 'Sem alterações, a versão atual foi mantida',
@@ -554,6 +569,7 @@ const ja: Messages = {
 		approve: 'このプロンプトを承認して閉じる（空のEnterでも可）',
 		edit: '書き換え後のプロンプトを手で編集',
 		ide: '書き換えたプロンプトを IDE で編集（VS Code、Cursor など）',
+		ipa: 'このプロンプトの IPA 発音を表示',
 		improve: '改善案を提案：より明確に、足りない所は[空欄?]にして記入を促す',
 		voice: '入力の代わりに声で指示する（音声入力を有効にする必要があります）',
 		history: 'すべてのバージョンを見て、続けるものを選ぶ',
@@ -591,6 +607,7 @@ const ja: Messages = {
 	historyTitle: 'バージョン履歴 — ↑↓ 選択 · Enter でこの版から続ける · Esc 中止',
 	inUse: '（使用中）',
 	editTitle: '編集 — Enterで保存、Escで中止',
+	ipa: {title: 'IPA 発音', working: 'IPA を作成中…', unsupported: language => `${language}では IPA を利用できません`},
 	ide: {
 		waiting: name => `${name} で編集中… ファイルを保存して閉じると戻ります（Esc でキャンセル）`,
 		unchanged: '変更はありませんでした。現在のバージョンを保持します',
@@ -624,6 +641,7 @@ const zh: Messages = {
 		approve: '批准此提示词并关闭（空回车也可以）',
 		edit: '手动编辑改写后的提示词',
 		ide: '在 IDE 中编辑改写后的提示词（VS Code、Cursor 等）',
+		ipa: '显示此提示词的 IPA 发音',
 		improve: '建议改进：更清晰，缺失处用 [空白?] 留给你填写',
 		voice: '用语音下达指令，代替打字（需开启语音输入）',
 		history: '查看所有版本，选择一个继续',
@@ -661,6 +679,7 @@ const zh: Messages = {
 	historyTitle: '版本历史 — ↑↓ 选择 · 回车从此版本继续 · Esc 取消',
 	inUse: '（当前）',
 	editTitle: '编辑 — 回车保存，Esc 取消',
+	ipa: {title: 'IPA 发音', working: '正在生成 IPA…', unsupported: language => `${language}暂不支持 IPA`},
 	ide: {
 		waiting: name => `正在 ${name} 中编辑… 保存并关闭文件即可返回（Esc 取消）`,
 		unchanged: '没有改动，保留当前版本',
@@ -694,6 +713,7 @@ const ko: Messages = {
 		approve: '이 프롬프트를 승인하고 닫기 (빈 Enter도 동일)',
 		edit: '다시 쓴 프롬프트를 직접 편집',
 		ide: '다시 쓴 프롬프트를 IDE에서 편집 (VS Code, Cursor 등)',
+		ipa: '이 프롬프트의 IPA 발음 표시',
 		improve: '개선 제안: 더 명확하게, 빠진 부분은 [빈칸?]으로 남김',
 		voice: '입력하는 대신 말로 지시하기 (음성 입력을 켜야 함)',
 		history: '모든 버전을 보고 이어서 작업할 버전 선택',
@@ -731,6 +751,7 @@ const ko: Messages = {
 	historyTitle: '버전 기록 — ↑↓ 선택 · Enter로 이 버전에서 계속 · Esc 취소',
 	inUse: ' (사용 중)',
 	editTitle: '편집 — Enter로 저장, Esc로 취소',
+	ipa: {title: 'IPA 발음', working: 'IPA 작성 중…', unsupported: language => `${language}은(는) IPA를 지원하지 않습니다`},
 	ide: {
 		waiting: name => `${name}에서 편집 중… 파일을 저장하고 닫으면 돌아옵니다 (Esc로 취소)`,
 		unchanged: '변경 사항이 없어 현재 버전을 유지합니다',

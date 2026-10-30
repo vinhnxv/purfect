@@ -28,6 +28,11 @@ export const LANGUAGES = [
 ] as const;
 export type LanguageCode = (typeof LANGUAGES)[number]['code'];
 
+// Languages whose spelling is enough to write a reliable IPA transcription. Chinese and Japanese
+// need readings (pinyin tones, kanji), Arabic and Thai leave sounds unwritten, and the model is not
+// dependable for Korean or Hindi, so /ipa is not offered for them.
+export const IPA_LANGUAGES: readonly string[] = ['en', 'fr', 'de', 'es', 'pt', 'it', 'ru', 'id', 'tr', 'vi'];
+
 export const DISPLAY_CODES = ['en', 'vi', 'fr', 'de', 'it', 'es', 'pt', 'ja', 'zh', 'ko'] as const;
 export type DisplayCode = (typeof DISPLAY_CODES)[number];
 export const DISPLAY_LANGUAGES = LANGUAGES.filter(l => (DISPLAY_CODES as readonly string[]).includes(l.code));

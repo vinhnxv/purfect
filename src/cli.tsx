@@ -4,16 +4,16 @@ import {useEffect, useState} from 'react';
 import {Box, Text, render, useApp, useInput} from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
-import {languageLabel, loadConfig, saveSetting, type Config, type SettingKey} from './config.js';
+import {IPA_LANGUAGES, languageLabel, loadConfig, saveSetting, type Config, type SettingKey} from './config.js';
 import {loadVoiceConfig, type VoiceConfig} from './voice/config.js';
 import {NoSpeechError} from './voice/dictation.js';
 import {useDictation} from './voice/use-dictation.js';
 import {COMMAND_NAMES, messages} from './i18n.js';
-import {rewrite, type Refine, type Rewrite, type Usage} from './rewrite.js';
+import {ipa, rewrite, type Refine, type Rewrite, type Usage} from './rewrite.js';
 import {editInIde, resolveIde, type Ide} from './ide.js';
 import {Settings} from './settings.js';
 
-type Stage = 'compose' | 'rewriting' | 'review' | 'edit' | 'ide' | 'history' | 'config';
+type Stage = 'compose' | 'rewriting' | 'review' | 'edit' | 'ide' | 'ipa' | 'history' | 'config';
 
 // One entry in the version history; label says how it came about (the instruction, or what was done).
 type Version = {result: Rewrite; label: string};
@@ -62,6 +62,7 @@ function App() {
 	const [refining, setRefining] = useState<{instruction: string; improve?: boolean}>(); // unset for a plain rewrite
 	const [warnedFor, setWarnedFor] = useState<string>(); // prompt we already warned about unfilled placeholders
 	const [edited, setEdited] = useState('');
+	const [ipaText, setIpaText] = useState<{prompt: string; text: string}>(); // IPA shown under the prompt it was made for
 	const [ide, setIde] = useState<Ide>(); // the IDE the prompt is open in while stage is 'ide'
 	const [error, setError] = useState<string>();
 	const [noticeState, setNoticeState] = useState<{text: string; info?: boolean}>();
@@ -116,6 +117,25 @@ function App() {
 		return () => controller.abort();
 	}, [stage, draft]);
 
+	// /ipa: asks the backend for the IPA of the current prompt, then shows it under the prompt.
+	useEffect(() => {
+		if (stage !== 'ipa') return;
+		const controller = new AbortController();
+		const prompt = result!.prompt;
+		ipa(prompt, cfg, controller.signal).then(
+			text => {
+				setIpaText({prompt, text});
+				setStage('review');
+			},
+			(e: Error) => {
+				if (controller.signal.aborted) return;
+				setNotice(e.message);
+				setStage('review');
+			},
+		);
+		return () => controller.abort();
+	}, [stage]);
+
 	// /ide: the prompt opens in the IDE; closing the file there adds the saved text as a new version.
 	useEffect(() => {
 		if (stage !== 'ide' || !ide) return;
@@ -137,7 +157,7 @@ function App() {
 
 	// Commands matching what is typed after "/", minus the ones that cannot run right now.
 	const available = (name: string) =>
-		name === 'undo' ? current > 0 : name === 'history' ? versions.length > 1 : name === 'approve' || name === 'edit' || name === 'ide' || name === 'improve' ? canUse : true;
+		name === 'undo' ? current > 0 : name === 'history' ? versions.length > 1 : name === 'approve' || name === 'edit' || name === 'ide' || name === 'improve' ? canUse : name === 'ipa' ? canUse && IPA_LANGUAGES.includes(cfg.targetLanguage) : true;
 	const commands = COMMAND_NAMES.map(name => ({name, desc: msgs.commands[name]}));
 	const suggestions =
 		stage === 'review' && chat.startsWith('/') && !chat.includes(' ')
@@ -195,7 +215,7 @@ function App() {
 		(_input, key) => {
 			if (stage === 'rewriting') {
 				if (key.escape) setStage(versions.length > 0 ? 'review' : 'compose');
-			} else if (stage === 'edit' || stage === 'ide') {
+			} else if (stage === 'edit' || stage === 'ide' || stage === 'ipa') {
 				if (key.escape) setStage('review');
 			} else if (stage === 'history') {
 				if (key.escape) setStage('review');
@@ -224,6 +244,7 @@ function App() {
 	const runCommand = (command: string) => {
 		setNotice(undefined);
 		if (!(COMMAND_NAMES as readonly string[]).includes(command)) return setNotice(msgs.unknownCommand(command));
+		if (command === 'ipa' && !IPA_LANGUAGES.includes(cfg.targetLanguage)) return setNotice(msgs.ipa.unsupported(languageLabel(cfg.targetLanguage)));
 		if (!available(command)) return setNotice(msgs.unavailable(command));
 		if (command === 'approve') {
 			// Improve mode leaves "[...?]" placeholders; make approving them as-is a deliberate second step.
@@ -239,6 +260,10 @@ function App() {
 		} else if (command === 'edit') {
 			setEdited(result!.prompt);
 			setStage('edit');
+		} else if (command === 'ipa') {
+			// A second /ipa hides the transcription again.
+			if (ipaText?.prompt === result!.prompt) setIpaText(undefined);
+			else setStage('ipa');
 		} else if (command === 'ide') {
 			try {
 				setIde(resolveIde(cfg.ide));
@@ -326,16 +351,25 @@ function App() {
 				</Text>
 			)}
 
-			{stage === 'ide' && ide && (
-			<Text>
-				<Text color="green">
-					<Spinner type="dots" />
-				</Text>{' '}
-				{msgs.ide.waiting(ide.name)}
-			</Text>
-		)}
+			{stage === 'ipa' && (
+				<Text>
+					<Text color="green">
+						<Spinner type="dots" />
+					</Text>{' '}
+					{msgs.ipa.working}
+				</Text>
+			)}
 
-		{stage === 'review' && error && <Text color="red">{msgs.error(error)}</Text>}
+			{stage === 'ide' && ide && (
+				<Text>
+					<Text color="green">
+						<Spinner type="dots" />
+					</Text>{' '}
+					{msgs.ide.waiting(ide.name)}
+				</Text>
+			)}
+
+			{stage === 'review' && error && <Text color="red">{msgs.error(error)}</Text>}
 
 			{stage === 'review' && result && !error && (
 				<Box flexDirection="column" gap={1}>
@@ -369,6 +403,15 @@ function App() {
 							)}
 						</Box>
 					)}
+				</Box>
+			)}
+
+			{stage === 'review' && ipaText?.prompt === result?.prompt && !error && (
+				<Box flexDirection="column">
+					<Text bold color="magenta">
+						{msgs.ipa.title}
+					</Text>
+					<Text>{ipaText!.text}</Text>
 				</Box>
 			)}
 

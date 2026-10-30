@@ -220,6 +220,7 @@ The chat box under the result is always on:
 | `/approve` | Approve this prompt and close                         |
 | `/edit`    | Edit the rewritten prompt by hand                     |
 | `/ide`     | Edit the rewritten prompt in your IDE (VS Code, Cursor, …) |
+| `/ipa`     | Show the IPA pronunciation of the prompt, sentence by sentence; again hides it |
 | `/improve` | Make the prompt clearer; gaps become `[...?]` to fill |
 | `/voice`   | Speak an instruction instead of typing it (needs voice on) |
 | `/history` | List every version, pick one to continue from         |
@@ -235,6 +236,12 @@ and the text comes back as a new version; `Esc` in purfect stops waiting. The ID
 block until the file is closed, which is what `--wait` does. To use another one, set `ide` (or
 `PURFECT_IDE`) to the full command, e.g. `"code --wait"` or `"\"/path/My IDE\" --wait"`. `$EDITOR`
 is not used, because purfect is often `$EDITOR` itself. Only VS Code has been tested.
+
+`/ipa` asks the model for an IPA transcription of the current prompt (one extra request, with the
+same backend) and shows it under the prompt. It is offered only when the target language is
+English, French, German, Spanish, Portuguese, Italian, Russian, Indonesian, Turkish or Vietnamese,
+whose spelling is enough for a reliable transcription. For Chinese, Japanese, Korean, Thai, Hindi
+and Arabic it is hidden and says so. The transcription comes from the model, so treat it as a guide.
 
 Versions are append-only: every rewrite, refinement and manual edit adds one, and nothing is
 deleted. Picking an old version in `/history` only moves the pointer, so refining from it adds

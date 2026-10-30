@@ -128,10 +128,26 @@ export function rewrite(draft: string, config: Config, signal: AbortSignal, refi
 	const context = refine && `<draft>\n${draft}\n</draft>\n<current_prompt>\n${refine.current}\n</current_prompt>\n`;
 	const message = refine ? context + (refine.improve ? '<improve/>' : `<instruction>\n${refine.instruction}\n</instruction>`) : draft;
 	const tips = config.promptTutor || Boolean(refine?.improve);
-	const system = buildSystemPrompt(config, tips);
-	if (config.backend === 'codex') return rewriteWithCodex(system, message, config, signal, outputSchema(config.languageTutor, tips));
+	return ask(buildSystemPrompt(config, tips), message, config, signal, outputSchema(config.languageTutor, tips));
+}
+
+// Sends one request to the configured backend. The reply is JSON with a `prompt` string.
+function ask(system: string, message: string, config: Config, signal: AbortSignal, schema: object): Promise<Rewrite> {
+	if (config.backend === 'codex') return rewriteWithCodex(system, message, config, signal, schema);
 	if (config.backend === 'openai') return rewriteWithOpenAI(system, message, config, signal);
 	return rewriteWithClaude(system, message, config, signal);
+}
+
+// IPA transcription of the text (/ipa), sentence by sentence. It reuses the rewrite plumbing, so the
+// transcription comes back in the `prompt` field.
+export async function ipa(text: string, config: Config, signal: AbortSignal): Promise<string> {
+	const system = `You write International Phonetic Alphabet (IPA) transcriptions. The text is in ${languageName(config.targetLanguage)}.
+Split it into sentences. For each sentence give the sentence, then on the next line its IPA between slashes, using the standard pronunciation (General American for English) with stress marks. Separate sentences with a blank line.
+Code, identifiers, file paths and URLs: transcribe them as they would be read aloud.
+
+Reply with JSON only, no code fence:
+{"prompt": "<the sentences and their IPA, lines separated by \\n>"}`;
+	return (await ask(system, text, config, signal, outputSchema(false, false))).prompt;
 }
 
 // Headless Claude Code reuses the user's existing login; no API key needed.
