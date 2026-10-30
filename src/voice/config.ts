@@ -1,4 +1,4 @@
-import {CONFIG_PATH, isObject, parseBoolean, readRawConfig} from '../config.js';
+import {CONFIG_PATH, parseBoolean, readRawConfig, section, text} from '../config.js';
 import {PROVIDERS} from './providers/index.js';
 import type {ProviderSettings} from './types.js';
 
@@ -18,18 +18,6 @@ export type VoiceConfig = {
 const DEFAULT_PROVIDER = 'openai';
 const DEFAULT_MAX_SECONDS = 60;
 const MAX_SECONDS_LIMIT = 300;
-
-const text = (value: unknown, where: string) => {
-	if (value === undefined) return undefined;
-	if (typeof value !== 'string') throw new Error(`${where} in ${CONFIG_PATH} must be a string`);
-	return value || undefined;
-};
-
-const section = (parent: Record<string, unknown>, name: string, where: string): Record<string, unknown> => {
-	if (parent[name] === undefined) return {};
-	if (!isObject(parent[name])) throw new Error(`"${where}" in ${CONFIG_PATH} must be an object`);
-	return parent[name];
-};
 
 // Precedence: PURFECT_VOICE_* environment > config file > defaults.
 export function loadVoiceConfig(): VoiceConfig {

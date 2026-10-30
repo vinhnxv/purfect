@@ -191,6 +191,67 @@ that exports a `ProviderDefinition` (`defaults` and `create(settings)`) and regi
 `src/voice/providers/index.ts`. Its settings then work under `voice.providers.<id>` and
 `PURFECT_VOICE_<ID>_*` with no other change.
 
+## Reading aloud
+
+`/speak` reads the current prompt aloud so you can hear how it sounds; `/speak` again or `Esc`
+stops it. The voice is AI-generated, and purfect says so while it plays.
+
+Like voice input, it is **off by default** and separate from everything else: its own `speech`
+block in the config file, its own `PURFECT_SPEECH_*` variables, its own key and endpoint. Nothing
+is shared with the rewrite backend or with voice input, so the speech key has to be set on its
+own, even for the same OpenAI account. The prompt text is sent to the provider.
+
+```json
+{
+  "speech": {
+    "enabled": true,
+    "provider": "openai-realtime",
+    "providers": { "openai-realtime": { "apiKey": "sk-…", "voice": "marin" } }
+  }
+}
+```
+
+| Setting                         | Env var                          | Default                |
+| ------------------------------- | -------------------------------- | ---------------------- |
+| `speech.enabled`                | `PURFECT_SPEECH_ENABLED`         | `false`                |
+| `speech.provider`               | `PURFECT_SPEECH_PROVIDER`        | `openai-realtime`      |
+| `speech.providers.<id>.apiKey`  | `PURFECT_SPEECH_<ID>_API_KEY`    | none                   |
+| `speech.providers.<id>.baseUrl` | `PURFECT_SPEECH_<ID>_BASE_URL`   | the provider's own     |
+| `speech.providers.<id>.model`   | `PURFECT_SPEECH_<ID>_MODEL`      | the provider's own     |
+| `speech.providers.<id>.voice`   | `PURFECT_SPEECH_<ID>_VOICE`      | the provider's own     |
+
+Requirements: `ffplay`, which comes with `ffmpeg` (macOS: `brew install ffmpeg`). The audio plays
+as it arrives, so it starts before the whole clip is ready. Only macOS has been tested.
+
+Providers (each has its own settings block, so each needs its own key; the id in the env var
+is upper-cased with `-` as `_`, e.g. `PURFECT_SPEECH_OPENAI_REALTIME_API_KEY`):
+
+- `openai-realtime` (default): `gpt-realtime-2.1-mini` over the Realtime API (a WebSocket), voice
+  `marin`. It is a conversational model, so purfect tells it to be a plain reader and fences the text
+  in `<read>` tags; against the live API it read the text word for word, even text that sounds like
+  an instruction. Listed at $0.60 per 1M text tokens in, $2.40 out and $20 per 1M audio tokens out.
+  The first sound arrives about 1 to 2 seconds after `/speak`, sometimes longer.
+- `openai`: `gpt-4o-mini-tts` through `/audio/speech`, voice `marin` (listed at $0.60 per 1M text
+  tokens in and $12 per 1M audio tokens out). OpenAI has announced that this model shuts down on
+  2027-01-06 and points to the Realtime API instead, so use `openai-realtime` for anything lasting.
+
+Texts over 4096 characters are refused by both. The cost of a reading is not shown.
+
+The last finished reading is kept in memory, so `/speak` on the same text, provider, model and
+voice plays again at once and costs nothing; reading a different text replaces it. Nothing is
+written to disk, and the clip is gone when purfect exits.
+
+### Adding a speech provider
+
+A provider is a `Synthesizer` (`src/speech/types.ts`): `synthesize(text, onAudio, signal)` calls
+`onAudio` with mono 16-bit PCM at the provider's `sampleRate`, as it arrives. A service that returns
+the whole clip calls it once; a streaming one (chunked HTTP, WebSocket) calls it many times, and
+nothing else changes. `openai` (chunked HTTP) and `openai-realtime` (WebSocket) are the two examples.
+Write a file under `src/speech/providers/` that exports a
+`SynthesizerDefinition` (`defaults` and `create(settings)`) and register it in
+`src/speech/providers/index.ts`. Its settings then work under `speech.providers.<id>` and
+`PURFECT_SPEECH_<ID>_*` with no other change.
+
 ## Rewrite rules
 
 The Prompt tutor's checks follow Anthropic's
@@ -221,6 +282,7 @@ The chat box under the result is always on:
 | `/edit`    | Edit the rewritten prompt by hand                     |
 | `/ide`     | Edit the rewritten prompt in your IDE (VS Code, Cursor, …) |
 | `/ipa`     | Show the IPA pronunciation of the prompt, sentence by sentence; again hides it |
+| `/speak`  | Read the prompt aloud with an AI voice (needs speech on); again stops it |
 | `/improve` | Make the prompt clearer; gaps become `[...?]` to fill |
 | `/voice`   | Speak an instruction instead of typing it (needs voice on) |
 | `/history` | List every version, pick one to continue from         |

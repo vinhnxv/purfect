@@ -203,6 +203,19 @@ function setPath(data: Record<string, unknown>, path: readonly string[], value: 
 	else node[last] = value;
 }
 
+// Readers for optional config-file values, shared by the voice and speech blocks.
+export const text = (value: unknown, where: string) => {
+	if (value === undefined) return undefined;
+	if (typeof value !== 'string') throw new Error(`${where} in ${CONFIG_PATH} must be a string`);
+	return value || undefined;
+};
+
+export const section = (parent: Record<string, unknown>, name: string, where: string): Record<string, unknown> => {
+	if (parent[name] === undefined) return {};
+	if (!isObject(parent[name])) throw new Error(`"${where}" in ${CONFIG_PATH} must be an object`);
+	return parent[name];
+};
+
 export function readRawConfig(): Record<string, unknown> {
 	let text: string;
 	try {

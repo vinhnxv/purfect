@@ -1,7 +1,7 @@
 import type {DisplayCode, SettingKey} from './config.js';
 
 // Slash commands of the review chat box, in the order they are suggested.
-export const COMMAND_NAMES = ['approve', 'edit', 'ide', 'ipa', 'improve', 'voice', 'history', 'undo', 'redo', 'back', 'tutor', 'config', 'quit'] as const;
+export const COMMAND_NAMES = ['approve', 'edit', 'ide', 'ipa', 'speak', 'improve', 'voice', 'history', 'undo', 'redo', 'back', 'tutor', 'config', 'quit'] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 // Every string the interface shows. The model's own output (explanations, tips) is not here:
@@ -32,6 +32,13 @@ export type Messages = {
 	inUse: string;
 	editTitle: string;
 	ipa: {title: string; working: string; unsupported: (language: string) => string};
+	speech: {
+		off: string;
+		loading: string;
+		speaking: string;
+		tooLong: (length: number, max: number) => string;
+		error: (reason: string) => string;
+	};
 	ide: {
 		waiting: (name: string) => string;
 		unchanged: string;
@@ -66,6 +73,7 @@ const en: Messages = {
 		edit: 'Edit the rewritten prompt by hand',
 		ide: 'Edit the rewritten prompt in your IDE (VS Code, Cursor, …)',
 		ipa: 'Show the IPA pronunciation of this prompt',
+		speak: 'Read the prompt aloud (AI-generated voice)',
 		improve: 'Suggest improvements: clearer, with [blanks?] for you to fill in',
 		voice: 'Speak an instruction instead of typing it (needs voice input on)',
 		history: 'See every version, pick one to continue from',
@@ -104,6 +112,13 @@ const en: Messages = {
 	inUse: ' (current)',
 	editTitle: 'Edit — Enter to save, Esc to cancel',
 	ipa: {title: 'IPA pronunciation', working: 'Writing the IPA…', unsupported: language => `IPA is not available for ${language}`},
+	speech: {
+		off: 'Reading aloud is off. Set "speech.enabled": true in the config file (or PURFECT_SPEECH_ENABLED=1) and add the provider key',
+		loading: 'Preparing the audio… (Esc to cancel)',
+		speaking: 'Speaking (AI-generated voice) — /speak or Esc to stop',
+		tooLong: (length, max) => `Too long to read aloud: ${length} characters, the provider accepts ${max}`,
+		error: reason => `Reading aloud failed: ${reason}`,
+	},
 	ide: {
 		waiting: name => `Editing in ${name}… save and close the file to come back (Esc to cancel)`,
 		unchanged: 'No changes made, keeping the current version',
@@ -138,6 +153,7 @@ const vi: Messages = {
 		edit: 'Tự sửa tay prompt đã rewrite',
 		ide: 'Sửa prompt đã rewrite trong IDE (VS Code, Cursor, …)',
 		ipa: 'Hiện phiên âm IPA của prompt này',
+		speak: 'Đọc to prompt (giọng do AI tạo)',
 		improve: 'Gợi ý cải thiện prompt: rõ hơn, chỗ thiếu để [trống?] cho bạn điền',
 		voice: 'Nói chỉ dẫn thay vì gõ (cần bật nhập bằng giọng nói)',
 		history: 'Xem mọi phiên bản đã chỉnh, chọn một bản để làm tiếp',
@@ -176,6 +192,13 @@ const vi: Messages = {
 	inUse: ' (đang dùng)',
 	editTitle: 'Chỉnh sửa — Enter để lưu, Esc để huỷ',
 	ipa: {title: 'Phiên âm IPA', working: 'Đang viết phiên âm IPA…', unsupported: language => `Chưa hỗ trợ IPA cho ${language}`},
+	speech: {
+		off: 'Chưa bật đọc to. Đặt "speech.enabled": true trong file config (hoặc PURFECT_SPEECH_ENABLED=1) và thêm khoá của provider',
+		loading: 'Đang chuẩn bị âm thanh… (Esc để huỷ)',
+		speaking: 'Đang đọc (giọng do AI tạo) — /speak hoặc Esc để dừng',
+		tooLong: (length, max) => `Quá dài để đọc: ${length} ký tự, provider nhận tối đa ${max}`,
+		error: reason => `Đọc to thất bại: ${reason}`,
+	},
 	ide: {
 		waiting: name => `Đang sửa trong ${name}… lưu và đóng file để quay lại (Esc để huỷ)`,
 		unchanged: 'Không có thay đổi, giữ nguyên phiên bản hiện tại',
@@ -210,6 +233,7 @@ const fr: Messages = {
 		edit: 'Modifier à la main le prompt réécrit',
 		ide: 'Modifier le prompt réécrit dans votre IDE (VS Code, Cursor, …)',
 		ipa: 'Afficher la prononciation API (IPA) de ce prompt',
+		speak: 'Lire le prompt à voix haute (voix générée par IA)',
 		improve: 'Suggérer des améliorations : plus clair, avec des [blancs ?] à remplir',
 		voice: 'Dicter une consigne au lieu de la taper (saisie vocale à activer)',
 		history: 'Voir toutes les versions, en choisir une pour continuer',
@@ -248,6 +272,13 @@ const fr: Messages = {
 	inUse: ' (en cours)',
 	editTitle: 'Modifier — Entrée pour enregistrer, Échap pour annuler',
 	ipa: {title: 'Prononciation API (IPA)', working: 'Transcription phonétique en cours…', unsupported: language => `L'API (IPA) n'est pas disponible pour ${language}`},
+	speech: {
+		off: 'La lecture à voix haute est désactivée. Mettez "speech.enabled": true dans le fichier de config (ou PURFECT_SPEECH_ENABLED=1) et ajoutez la clé du fournisseur',
+		loading: 'Préparation de l\'audio… (Échap pour annuler)',
+		speaking: 'Lecture en cours (voix générée par IA) — /speak ou Échap pour arrêter',
+		tooLong: (length, max) => `Trop long pour être lu : ${length} caractères, le fournisseur en accepte ${max}`,
+		error: reason => `Échec de la lecture à voix haute : ${reason}`,
+	},
 	ide: {
 		waiting: name => `Modification dans ${name}… enregistrez et fermez le fichier pour revenir (Échap pour annuler)`,
 		unchanged: 'Aucune modification, la version actuelle est conservée',
@@ -282,6 +313,7 @@ const de: Messages = {
 		edit: 'Den umgeschriebenen Prompt von Hand bearbeiten',
 		ide: 'Den umgeschriebenen Prompt in Ihrer IDE bearbeiten (VS Code, Cursor, …)',
 		ipa: 'IPA-Aussprache dieses Prompts anzeigen',
+		speak: 'Den Prompt vorlesen (KI-generierte Stimme)',
 		improve: 'Verbesserungen vorschlagen: klarer, mit [Lücken?] zum Ausfüllen',
 		voice: 'Eine Anweisung sprechen statt tippen (Spracheingabe muss aktiv sein)',
 		history: 'Alle Versionen ansehen, eine zum Weitermachen wählen',
@@ -320,6 +352,13 @@ const de: Messages = {
 	inUse: ' (aktuell)',
 	editTitle: 'Bearbeiten — Enter zum Speichern, Esc zum Abbrechen',
 	ipa: {title: 'IPA-Aussprache', working: 'IPA-Lautschrift wird erstellt…', unsupported: language => `IPA ist für ${language} nicht verfügbar`},
+	speech: {
+		off: 'Vorlesen ist aus. Setzen Sie "speech.enabled": true in der Konfigurationsdatei (oder PURFECT_SPEECH_ENABLED=1) und fügen Sie den Schlüssel des Anbieters hinzu',
+		loading: 'Audio wird vorbereitet… (Esc zum Abbrechen)',
+		speaking: 'Wird vorgelesen (KI-generierte Stimme) — /speak oder Esc zum Stoppen',
+		tooLong: (length, max) => `Zu lang zum Vorlesen: ${length} Zeichen, der Anbieter akzeptiert ${max}`,
+		error: reason => `Vorlesen fehlgeschlagen: ${reason}`,
+	},
 	ide: {
 		waiting: name => `Bearbeitung in ${name}… Datei speichern und schließen, um zurückzukehren (Esc zum Abbrechen)`,
 		unchanged: 'Keine Änderungen, die aktuelle Version bleibt erhalten',
@@ -354,6 +393,7 @@ const it: Messages = {
 		edit: 'Modifica a mano il prompt riscritto',
 		ide: 'Modifica il prompt riscritto nel tuo IDE (VS Code, Cursor, …)',
 		ipa: 'Mostra la pronuncia IPA di questo prompt',
+		speak: 'Leggi il prompt ad alta voce (voce generata dall\'IA)',
 		improve: 'Suggerisci miglioramenti: più chiaro, con [vuoti?] da riempire',
 		voice: 'Dettare un\'istruzione invece di scriverla (serve l\'input vocale attivo)',
 		history: 'Vedi tutte le versioni, scegline una da cui continuare',
@@ -392,6 +432,13 @@ const it: Messages = {
 	inUse: ' (in uso)',
 	editTitle: 'Modifica — Invio per salvare, Esc per annullare',
 	ipa: {title: 'Pronuncia IPA', working: 'Scrittura della trascrizione IPA…', unsupported: language => `IPA non è disponibile per ${language}`},
+	speech: {
+		off: 'La lettura ad alta voce è disattivata. Imposta "speech.enabled": true nel file di configurazione (o PURFECT_SPEECH_ENABLED=1) e aggiungi la chiave del provider',
+		loading: 'Preparazione dell\'audio… (Esc per annullare)',
+		speaking: 'Lettura in corso (voce generata dall\'IA) — /speak o Esc per fermare',
+		tooLong: (length, max) => `Troppo lungo da leggere: ${length} caratteri, il provider ne accetta ${max}`,
+		error: reason => `Lettura ad alta voce non riuscita: ${reason}`,
+	},
 	ide: {
 		waiting: name => `Modifica in ${name}… salva e chiudi il file per tornare (Esc per annullare)`,
 		unchanged: 'Nessuna modifica, resta la versione attuale',
@@ -426,6 +473,7 @@ const es: Messages = {
 		edit: 'Editar a mano el prompt reescrito',
 		ide: 'Editar el prompt reescrito en tu IDE (VS Code, Cursor, …)',
 		ipa: 'Mostrar la pronunciación IPA de este prompt',
+		speak: 'Leer el prompt en voz alta (voz generada por IA)',
 		improve: 'Sugerir mejoras: más claro, con [huecos?] por rellenar',
 		voice: 'Dictar una instrucción en lugar de escribirla (requiere la entrada de voz activada)',
 		history: 'Ver todas las versiones y elegir una para continuar',
@@ -464,6 +512,13 @@ const es: Messages = {
 	inUse: ' (actual)',
 	editTitle: 'Editar — Enter para guardar, Esc para cancelar',
 	ipa: {title: 'Pronunciación IPA', working: 'Escribiendo la transcripción IPA…', unsupported: language => `IPA no está disponible para ${language}`},
+	speech: {
+		off: 'La lectura en voz alta está desactivada. Pon "speech.enabled": true en el archivo de configuración (o PURFECT_SPEECH_ENABLED=1) y añade la clave del proveedor',
+		loading: 'Preparando el audio… (Esc para cancelar)',
+		speaking: 'Leyendo (voz generada por IA) — /speak o Esc para detener',
+		tooLong: (length, max) => `Demasiado largo para leer: ${length} caracteres, el proveedor admite ${max}`,
+		error: reason => `Falló la lectura en voz alta: ${reason}`,
+	},
 	ide: {
 		waiting: name => `Editando en ${name}… guarda y cierra el archivo para volver (Esc para cancelar)`,
 		unchanged: 'Sin cambios, se mantiene la versión actual',
@@ -498,6 +553,7 @@ const pt: Messages = {
 		edit: 'Editar à mão o prompt reescrito',
 		ide: 'Editar o prompt reescrito na sua IDE (VS Code, Cursor, …)',
 		ipa: 'Mostrar a pronúncia IPA deste prompt',
+		speak: 'Ler o prompt em voz alta (voz gerada por IA)',
 		improve: 'Sugerir melhorias: mais claro, com [lacunas?] para preencher',
 		voice: 'Ditar uma instrução em vez de digitar (requer a entrada de voz ativada)',
 		history: 'Ver todas as versões e escolher uma para continuar',
@@ -536,6 +592,13 @@ const pt: Messages = {
 	inUse: ' (atual)',
 	editTitle: 'Editar — Enter para salvar, Esc para cancelar',
 	ipa: {title: 'Pronúncia IPA', working: 'Escrevendo a transcrição IPA…', unsupported: language => `IPA não está disponível para ${language}`},
+	speech: {
+		off: 'A leitura em voz alta está desativada. Defina "speech.enabled": true no arquivo de configuração (ou PURFECT_SPEECH_ENABLED=1) e adicione a chave do provedor',
+		loading: 'Preparando o áudio… (Esc para cancelar)',
+		speaking: 'Lendo (voz gerada por IA) — /speak ou Esc para parar',
+		tooLong: (length, max) => `Longo demais para ler: ${length} caracteres, o provedor aceita ${max}`,
+		error: reason => `Falha na leitura em voz alta: ${reason}`,
+	},
 	ide: {
 		waiting: name => `Editando em ${name}… salve e feche o arquivo para voltar (Esc para cancelar)`,
 		unchanged: 'Sem alterações, a versão atual foi mantida',
@@ -570,6 +633,7 @@ const ja: Messages = {
 		edit: '書き換え後のプロンプトを手で編集',
 		ide: '書き換えたプロンプトを IDE で編集（VS Code、Cursor など）',
 		ipa: 'このプロンプトの IPA 発音を表示',
+		speak: 'プロンプトを読み上げ（AI 生成の音声）',
 		improve: '改善案を提案：より明確に、足りない所は[空欄?]にして記入を促す',
 		voice: '入力の代わりに声で指示する（音声入力を有効にする必要があります）',
 		history: 'すべてのバージョンを見て、続けるものを選ぶ',
@@ -608,6 +672,13 @@ const ja: Messages = {
 	inUse: '（使用中）',
 	editTitle: '編集 — Enterで保存、Escで中止',
 	ipa: {title: 'IPA 発音', working: 'IPA を作成中…', unsupported: language => `${language}では IPA を利用できません`},
+	speech: {
+		off: '読み上げはオフです。設定ファイルで "speech.enabled": true を設定し（または PURFECT_SPEECH_ENABLED=1）、プロバイダーのキーを追加してください',
+		loading: '音声を準備中…（Esc でキャンセル）',
+		speaking: '読み上げ中（AI 生成の音声）— /speak または Esc で停止',
+		tooLong: (length, max) => `長すぎて読み上げられません: ${length} 文字（上限 ${max}）`,
+		error: reason => `読み上げに失敗しました: ${reason}`,
+	},
 	ide: {
 		waiting: name => `${name} で編集中… ファイルを保存して閉じると戻ります（Esc でキャンセル）`,
 		unchanged: '変更はありませんでした。現在のバージョンを保持します',
@@ -642,6 +713,7 @@ const zh: Messages = {
 		edit: '手动编辑改写后的提示词',
 		ide: '在 IDE 中编辑改写后的提示词（VS Code、Cursor 等）',
 		ipa: '显示此提示词的 IPA 发音',
+		speak: '朗读提示词（AI 生成的语音）',
 		improve: '建议改进：更清晰，缺失处用 [空白?] 留给你填写',
 		voice: '用语音下达指令，代替打字（需开启语音输入）',
 		history: '查看所有版本，选择一个继续',
@@ -680,6 +752,13 @@ const zh: Messages = {
 	inUse: '（当前）',
 	editTitle: '编辑 — 回车保存，Esc 取消',
 	ipa: {title: 'IPA 发音', working: '正在生成 IPA…', unsupported: language => `${language}暂不支持 IPA`},
+	speech: {
+		off: '朗读已关闭。请在配置文件中设置 "speech.enabled": true（或 PURFECT_SPEECH_ENABLED=1）并添加提供商密钥',
+		loading: '正在准备音频…（Esc 取消）',
+		speaking: '正在朗读（AI 生成的语音）— /speak 或 Esc 停止',
+		tooLong: (length, max) => `太长，无法朗读：${length} 个字符，提供商最多接受 ${max}`,
+		error: reason => `朗读失败：${reason}`,
+	},
 	ide: {
 		waiting: name => `正在 ${name} 中编辑… 保存并关闭文件即可返回（Esc 取消）`,
 		unchanged: '没有改动，保留当前版本',
@@ -714,6 +793,7 @@ const ko: Messages = {
 		edit: '다시 쓴 프롬프트를 직접 편집',
 		ide: '다시 쓴 프롬프트를 IDE에서 편집 (VS Code, Cursor 등)',
 		ipa: '이 프롬프트의 IPA 발음 표시',
+		speak: '프롬프트를 소리 내어 읽기 (AI 생성 음성)',
 		improve: '개선 제안: 더 명확하게, 빠진 부분은 [빈칸?]으로 남김',
 		voice: '입력하는 대신 말로 지시하기 (음성 입력을 켜야 함)',
 		history: '모든 버전을 보고 이어서 작업할 버전 선택',
@@ -752,6 +832,13 @@ const ko: Messages = {
 	inUse: ' (사용 중)',
 	editTitle: '편집 — Enter로 저장, Esc로 취소',
 	ipa: {title: 'IPA 발음', working: 'IPA 작성 중…', unsupported: language => `${language}은(는) IPA를 지원하지 않습니다`},
+	speech: {
+		off: '소리 내어 읽기가 꺼져 있습니다. 설정 파일에서 "speech.enabled": true 로 설정(또는 PURFECT_SPEECH_ENABLED=1)하고 제공자 키를 추가하세요',
+		loading: '오디오 준비 중… (Esc로 취소)',
+		speaking: '읽는 중 (AI 생성 음성) — /speak 또는 Esc로 중지',
+		tooLong: (length, max) => `너무 길어서 읽을 수 없습니다: ${length}자 (최대 ${max}자)`,
+		error: reason => `읽기 실패: ${reason}`,
+	},
 	ide: {
 		waiting: name => `${name}에서 편집 중… 파일을 저장하고 닫으면 돌아옵니다 (Esc로 취소)`,
 		unchanged: '변경 사항이 없어 현재 버전을 유지합니다',

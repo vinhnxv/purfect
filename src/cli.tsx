@@ -7,6 +7,9 @@ import TextInput from 'ink-text-input';
 import {IPA_LANGUAGES, languageLabel, loadConfig, saveSetting, type Config, type SettingKey} from './config.js';
 import {loadVoiceConfig, type VoiceConfig} from './voice/config.js';
 import {NoSpeechError} from './voice/dictation.js';
+import {loadSpeechConfig, type SpeechConfig} from './speech/config.js';
+import {TooLongError} from './speech/speak.js';
+import {useSpeech} from './speech/use-speech.js';
 import {useDictation} from './voice/use-dictation.js';
 import {COMMAND_NAMES, messages} from './i18n.js';
 import {ipa, rewrite, type Refine, type Rewrite, type Usage} from './rewrite.js';
@@ -40,6 +43,15 @@ try {
 	voiceProblem = (e as Error).message;
 }
 
+// Reading aloud has its own config too, with the same soft failure.
+let speech: SpeechConfig | undefined;
+let speechProblem: string | undefined;
+try {
+	speech = loadSpeechConfig();
+} catch (e) {
+	speechProblem = (e as Error).message;
+}
+
 let approved: string | undefined;
 
 function App() {
@@ -58,6 +70,7 @@ function App() {
 	const [chatKey, setChatKey] = useState(0); // remounting the input is how Tab moves its cursor to the end
 	const [draftKey, setDraftKey] = useState(0); // same for the draft box, after voice adds text
 	const dictation = useDictation(voice);
+	const speaking = useSpeech(speech);
 	const [pick, setPick] = useState(0);
 	const [refining, setRefining] = useState<{instruction: string; improve?: boolean}>(); // unset for a plain rewrite
 	const [warnedFor, setWarnedFor] = useState<string>(); // prompt we already warned about unfilled placeholders
@@ -117,6 +130,12 @@ function App() {
 		return () => controller.abort();
 	}, [stage, draft]);
 
+	// Esc stops the reading, and it never outlives the prompt it was reading.
+	useInput((_input, key) => key.escape && speaking.stop(), {isActive: speaking.phase !== 'idle'});
+	useEffect(() => {
+		if (stage !== 'review') speaking.stop();
+	}, [stage]);
+
 	// /ipa: asks the backend for the IPA of the current prompt, then shows it under the prompt.
 	useEffect(() => {
 		if (stage !== 'ipa') return;
@@ -157,7 +176,7 @@ function App() {
 
 	// Commands matching what is typed after "/", minus the ones that cannot run right now.
 	const available = (name: string) =>
-		name === 'undo' ? current > 0 : name === 'history' ? versions.length > 1 : name === 'approve' || name === 'edit' || name === 'ide' || name === 'improve' ? canUse : name === 'ipa' ? canUse && IPA_LANGUAGES.includes(cfg.targetLanguage) : true;
+		name === 'undo' ? current > 0 : name === 'history' ? versions.length > 1 : name === 'approve' || name === 'edit' || name === 'ide' || name === 'speak' || name === 'improve' ? canUse : name === 'ipa' ? canUse && IPA_LANGUAGES.includes(cfg.targetLanguage) : true;
 	const commands = COMMAND_NAMES.map(name => ({name, desc: msgs.commands[name]}));
 	const suggestions =
 		stage === 'review' && chat.startsWith('/') && !chat.includes(' ')
@@ -260,6 +279,16 @@ function App() {
 		} else if (command === 'edit') {
 			setEdited(result!.prompt);
 			setStage('edit');
+		} else if (command === 'speak') {
+			// A second /speak stops it.
+			if (speaking.phase !== 'idle') return speaking.stop();
+			if (!speech?.enabled) return setNotice(speechProblem ?? msgs.speech.off);
+			const fail = (e: Error) => setNotice(e instanceof TooLongError ? msgs.speech.tooLong(e.length, e.max) : msgs.speech.error(e.message));
+			try {
+				speaking.speak(result!.prompt, fail);
+			} catch (e) {
+				fail(e as Error);
+			}
 		} else if (command === 'ipa') {
 			// A second /ipa hides the transcription again.
 			if (ipaText?.prompt === result!.prompt) setIpaText(undefined);
@@ -416,6 +445,13 @@ function App() {
 			)}
 
 			{stage === 'review' && result?.usage && !error && <UsageLine usage={result.usage} />}
+
+			{stage === 'review' && speaking.phase !== 'idle' && (
+				<Text>
+					<Text color="green">{speaking.phase === 'loading' ? <Spinner type="dots" /> : '▶'}</Text>{' '}
+					{speaking.phase === 'loading' ? msgs.speech.loading : msgs.speech.speaking}
+				</Text>
+			)}
 
 			{(stage === 'review' || stage === 'compose') && noticeState && <Text color={noticeState.info ? 'green' : 'red'}>{noticeState.text}</Text>}
 
