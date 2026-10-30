@@ -2,6 +2,7 @@
   "name": "purfect",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Terminal prompt composer: write a prompt in Vietnamese, rewrite it to English, review and approve",
   "scripts": {

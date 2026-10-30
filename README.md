@@ -163,3 +163,7 @@ in the chat box to fill them. Approving a prompt that still has placeholders ask
 
 Each refinement sends the original draft, the current prompt and your instruction, and returns
 the full revised prompt with a fresh explanation (same backend and cost as a rewrite).
+
+## License
+
+[MIT](LICENSE)
