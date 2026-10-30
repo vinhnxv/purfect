@@ -1,7 +1,7 @@
 import type {DisplayCode, SettingKey} from './config.js';
 
 // Slash commands of the review chat box, in the order they are suggested.
-export const COMMAND_NAMES = ['approve', 'edit', 'improve', 'history', 'undo', 'redo', 'back', 'tutor', 'config', 'quit'] as const;
+export const COMMAND_NAMES = ['approve', 'edit', 'improve', 'voice', 'history', 'undo', 'redo', 'back', 'tutor', 'config', 'quit'] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 // Every string the interface shows. The model's own output (explanations, tips) is not here:
@@ -31,6 +31,15 @@ export type Messages = {
 	historyTitle: string;
 	inUse: string;
 	editTitle: string;
+	voice: {
+		hint: string;
+		off: string;
+		recording: (seconds: number, max: number) => string;
+		transcribing: string;
+		noSpeech: string;
+		error: (reason: string) => string;
+		done: (detail: string) => string;
+	};
 	settings: {
 		title: string;
 		pick: (label: string) => string;
@@ -51,6 +60,7 @@ const en: Messages = {
 		approve: 'Approve this prompt and close (an empty Enter does the same)',
 		edit: 'Edit the rewritten prompt by hand',
 		improve: 'Suggest improvements: clearer, with [blanks?] for you to fill in',
+		voice: 'Speak an instruction instead of typing it (needs voice input on)',
 		history: 'See every version, pick one to continue from',
 		undo: 'Go back one version',
 		redo: 'Rewrite again from the original draft (as a new version)',
@@ -86,6 +96,15 @@ const en: Messages = {
 	historyTitle: 'Version history — ↑↓ select · Enter to continue from this version · Esc to cancel',
 	inUse: ' (current)',
 	editTitle: 'Edit — Enter to save, Esc to cancel',
+	voice: {
+		hint: 'Tab: speak',
+		off: 'Voice input is off. Set "voice.enabled": true in the config file (or PURFECT_VOICE_ENABLED=1) and add the provider key',
+		recording: (seconds, max) => `Recording ${seconds}s of ${max}s — Tab or Enter to stop, Esc to cancel`,
+		transcribing: 'Transcribing… (Esc to cancel)',
+		noSpeech: 'No speech was recognized. Check that your terminal app may use the microphone (macOS: System Settings → Privacy & Security → Microphone)',
+		error: reason => `Voice input failed: ${reason}`,
+		done: detail => `Transcribed (${detail}). Edit if needed, then press Enter`,
+	},
 	settings: {
 		title: 'Settings — ↑↓ select · Enter change · Esc back',
 		pick: label => `${label} — ↑↓ select · Enter save · Esc cancel`,
@@ -106,6 +125,7 @@ const vi: Messages = {
 		approve: 'Duyệt prompt này và đóng (Enter trống cũng vậy)',
 		edit: 'Tự sửa tay prompt đã rewrite',
 		improve: 'Gợi ý cải thiện prompt: rõ hơn, chỗ thiếu để [trống?] cho bạn điền',
+		voice: 'Nói chỉ dẫn thay vì gõ (cần bật nhập bằng giọng nói)',
 		history: 'Xem mọi phiên bản đã chỉnh, chọn một bản để làm tiếp',
 		undo: 'Về phiên bản liền trước',
 		redo: 'Rewrite lại từ bản nháp gốc (thành một phiên bản mới)',
@@ -141,6 +161,15 @@ const vi: Messages = {
 	historyTitle: 'Lịch sử phiên bản — ↑↓ chọn · Enter dùng bản này để làm tiếp · Esc huỷ',
 	inUse: ' (đang dùng)',
 	editTitle: 'Chỉnh sửa — Enter để lưu, Esc để huỷ',
+	voice: {
+		hint: 'Tab: nói',
+		off: 'Chưa bật nhập bằng giọng nói. Đặt "voice.enabled": true trong file config (hoặc PURFECT_VOICE_ENABLED=1) và thêm khoá của provider',
+		recording: (seconds, max) => `Đang ghi âm ${seconds}s/${max}s — Tab hoặc Enter để dừng, Esc để huỷ`,
+		transcribing: 'Đang chuyển thành chữ… (Esc để huỷ)',
+		noSpeech: 'Không nhận ra giọng nói. Kiểm tra ứng dụng terminal đã được phép dùng micro (macOS: System Settings → Privacy & Security → Microphone)',
+		error: reason => `Nhập bằng giọng nói thất bại: ${reason}`,
+		done: detail => `Đã chuyển thành chữ (${detail}). Sửa nếu cần, rồi nhấn Enter`,
+	},
 	settings: {
 		title: 'Cài đặt — ↑↓ chọn · Enter đổi · Esc quay lại',
 		pick: label => `${label} — ↑↓ chọn · Enter lưu · Esc huỷ`,
@@ -161,6 +190,7 @@ const fr: Messages = {
 		approve: 'Valider ce prompt et fermer (Entrée vide aussi)',
 		edit: 'Modifier à la main le prompt réécrit',
 		improve: 'Suggérer des améliorations : plus clair, avec des [blancs ?] à remplir',
+		voice: 'Dicter une consigne au lieu de la taper (saisie vocale à activer)',
 		history: 'Voir toutes les versions, en choisir une pour continuer',
 		undo: 'Revenir à la version précédente',
 		redo: 'Réécrire depuis le brouillon d’origine (nouvelle version)',
@@ -196,6 +226,15 @@ const fr: Messages = {
 	historyTitle: 'Historique des versions — ↑↓ choisir · Entrée pour continuer depuis cette version · Échap annuler',
 	inUse: ' (en cours)',
 	editTitle: 'Modifier — Entrée pour enregistrer, Échap pour annuler',
+	voice: {
+		hint: 'Tab : parler',
+		off: 'La saisie vocale est désactivée. Mettez "voice.enabled": true dans le fichier de config (ou PURFECT_VOICE_ENABLED=1) et ajoutez la clé du fournisseur',
+		recording: (seconds, max) => `Enregistrement ${seconds}s sur ${max}s — Tab ou Entrée pour arrêter, Échap pour annuler`,
+		transcribing: 'Transcription… (Échap pour annuler)',
+		noSpeech: 'Aucune parole reconnue. Vérifiez que votre terminal a le droit d’utiliser le micro (macOS : Réglages Système → Confidentialité et sécurité → Microphone)',
+		error: reason => `La saisie vocale a échoué : ${reason}`,
+		done: detail => `Transcrit (${detail}). Modifiez si besoin, puis appuyez sur Entrée`,
+	},
 	settings: {
 		title: 'Réglages — ↑↓ choisir · Entrée modifier · Échap retour',
 		pick: label => `${label} — ↑↓ choisir · Entrée enregistrer · Échap annuler`,
@@ -216,6 +255,7 @@ const de: Messages = {
 		approve: 'Diesen Prompt übernehmen und schließen (leeres Enter geht auch)',
 		edit: 'Den umgeschriebenen Prompt von Hand bearbeiten',
 		improve: 'Verbesserungen vorschlagen: klarer, mit [Lücken?] zum Ausfüllen',
+		voice: 'Eine Anweisung sprechen statt tippen (Spracheingabe muss aktiv sein)',
 		history: 'Alle Versionen ansehen, eine zum Weitermachen wählen',
 		undo: 'Zur vorherigen Version',
 		redo: 'Aus dem ursprünglichen Entwurf neu schreiben (als neue Version)',
@@ -251,6 +291,15 @@ const de: Messages = {
 	historyTitle: 'Versionsverlauf — ↑↓ wählen · Enter: mit dieser Version weitermachen · Esc abbrechen',
 	inUse: ' (aktuell)',
 	editTitle: 'Bearbeiten — Enter zum Speichern, Esc zum Abbrechen',
+	voice: {
+		hint: 'Tab: sprechen',
+		off: 'Spracheingabe ist aus. Setzen Sie "voice.enabled": true in der Config-Datei (oder PURFECT_VOICE_ENABLED=1) und tragen Sie den Schlüssel des Anbieters ein',
+		recording: (seconds, max) => `Aufnahme ${seconds}s von ${max}s — Tab oder Enter zum Beenden, Esc zum Abbrechen`,
+		transcribing: 'Transkribiere… (Esc zum Abbrechen)',
+		noSpeech: 'Keine Sprache erkannt. Prüfen Sie, ob Ihre Terminal-App das Mikrofon nutzen darf (macOS: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon)',
+		error: reason => `Spracheingabe fehlgeschlagen: ${reason}`,
+		done: detail => `Transkribiert (${detail}). Bei Bedarf bearbeiten, dann Enter drücken`,
+	},
 	settings: {
 		title: 'Einstellungen — ↑↓ wählen · Enter ändern · Esc zurück',
 		pick: label => `${label} — ↑↓ wählen · Enter speichern · Esc abbrechen`,
@@ -271,6 +320,7 @@ const it: Messages = {
 		approve: 'Approva questo prompt e chiudi (anche Invio vuoto)',
 		edit: 'Modifica a mano il prompt riscritto',
 		improve: 'Suggerisci miglioramenti: più chiaro, con [vuoti?] da riempire',
+		voice: 'Dettare un\'istruzione invece di scriverla (serve l\'input vocale attivo)',
 		history: 'Vedi tutte le versioni, scegline una da cui continuare',
 		undo: 'Torna alla versione precedente',
 		redo: 'Riscrivi dalla bozza originale (come nuova versione)',
@@ -306,6 +356,15 @@ const it: Messages = {
 	historyTitle: 'Cronologia versioni — ↑↓ scegli · Invio per continuare da questa versione · Esc annulla',
 	inUse: ' (in uso)',
 	editTitle: 'Modifica — Invio per salvare, Esc per annullare',
+	voice: {
+		hint: 'Tab: parla',
+		off: 'L\'input vocale è disattivato. Imposta "voice.enabled": true nel file di config (o PURFECT_VOICE_ENABLED=1) e aggiungi la chiave del provider',
+		recording: (seconds, max) => `Registrazione ${seconds}s di ${max}s — Tab o Invio per fermare, Esc per annullare`,
+		transcribing: 'Trascrizione… (Esc per annullare)',
+		noSpeech: 'Nessun parlato riconosciuto. Controlla che l\'app del terminale possa usare il microfono (macOS: Impostazioni di Sistema → Privacy e sicurezza → Microfono)',
+		error: reason => `Input vocale non riuscito: ${reason}`,
+		done: detail => `Trascritto (${detail}). Modifica se serve, poi premi Invio`,
+	},
 	settings: {
 		title: 'Impostazioni — ↑↓ scegli · Invio cambia · Esc indietro',
 		pick: label => `${label} — ↑↓ scegli · Invio salva · Esc annulla`,
@@ -326,6 +385,7 @@ const es: Messages = {
 		approve: 'Aprobar este prompt y cerrar (Enter vacío también)',
 		edit: 'Editar a mano el prompt reescrito',
 		improve: 'Sugerir mejoras: más claro, con [huecos?] por rellenar',
+		voice: 'Dictar una instrucción en lugar de escribirla (requiere la entrada de voz activada)',
 		history: 'Ver todas las versiones y elegir una para continuar',
 		undo: 'Volver a la versión anterior',
 		redo: 'Reescribir desde el borrador original (como versión nueva)',
@@ -361,6 +421,15 @@ const es: Messages = {
 	historyTitle: 'Historial de versiones — ↑↓ elegir · Enter para continuar desde esta versión · Esc cancelar',
 	inUse: ' (actual)',
 	editTitle: 'Editar — Enter para guardar, Esc para cancelar',
+	voice: {
+		hint: 'Tab: hablar',
+		off: 'La entrada de voz está desactivada. Pon "voice.enabled": true en el archivo de config (o PURFECT_VOICE_ENABLED=1) y añade la clave del proveedor',
+		recording: (seconds, max) => `Grabando ${seconds}s de ${max}s — Tab o Enter para parar, Esc para cancelar`,
+		transcribing: 'Transcribiendo… (Esc para cancelar)',
+		noSpeech: 'No se reconoció voz. Comprueba que tu app de terminal pueda usar el micrófono (macOS: Ajustes del Sistema → Privacidad y seguridad → Micrófono)',
+		error: reason => `Falló la entrada de voz: ${reason}`,
+		done: detail => `Transcrito (${detail}). Edítalo si hace falta y pulsa Enter`,
+	},
 	settings: {
 		title: 'Ajustes — ↑↓ elegir · Enter cambiar · Esc volver',
 		pick: label => `${label} — ↑↓ elegir · Enter guardar · Esc cancelar`,
@@ -381,6 +450,7 @@ const pt: Messages = {
 		approve: 'Aprovar este prompt e fechar (Enter vazio também)',
 		edit: 'Editar à mão o prompt reescrito',
 		improve: 'Sugerir melhorias: mais claro, com [lacunas?] para preencher',
+		voice: 'Ditar uma instrução em vez de digitar (requer a entrada de voz ativada)',
 		history: 'Ver todas as versões e escolher uma para continuar',
 		undo: 'Voltar à versão anterior',
 		redo: 'Reescrever a partir do rascunho original (como nova versão)',
@@ -416,6 +486,15 @@ const pt: Messages = {
 	historyTitle: 'Histórico de versões — ↑↓ escolher · Enter para continuar desta versão · Esc cancelar',
 	inUse: ' (atual)',
 	editTitle: 'Editar — Enter para salvar, Esc para cancelar',
+	voice: {
+		hint: 'Tab: falar',
+		off: 'A entrada de voz está desativada. Defina "voice.enabled": true no arquivo de config (ou PURFECT_VOICE_ENABLED=1) e adicione a chave do provedor',
+		recording: (seconds, max) => `Gravando ${seconds}s de ${max}s — Tab ou Enter para parar, Esc para cancelar`,
+		transcribing: 'Transcrevendo… (Esc para cancelar)',
+		noSpeech: 'Nenhuma fala reconhecida. Verifique se o app de terminal pode usar o microfone (macOS: Ajustes do Sistema → Privacidade e segurança → Microfone)',
+		error: reason => `Falha na entrada de voz: ${reason}`,
+		done: detail => `Transcrito (${detail}). Edite se precisar e pressione Enter`,
+	},
 	settings: {
 		title: 'Configurações — ↑↓ escolher · Enter alterar · Esc voltar',
 		pick: label => `${label} — ↑↓ escolher · Enter salvar · Esc cancelar`,
@@ -436,6 +515,7 @@ const ja: Messages = {
 		approve: 'このプロンプトを承認して閉じる（空のEnterでも可）',
 		edit: '書き換え後のプロンプトを手で編集',
 		improve: '改善案を提案：より明確に、足りない所は[空欄?]にして記入を促す',
+		voice: '入力の代わりに声で指示する（音声入力を有効にする必要があります）',
 		history: 'すべてのバージョンを見て、続けるものを選ぶ',
 		undo: '一つ前のバージョンに戻る',
 		redo: '元の下書きから書き直す（新しいバージョンとして）',
@@ -471,6 +551,15 @@ const ja: Messages = {
 	historyTitle: 'バージョン履歴 — ↑↓ 選択 · Enter でこの版から続ける · Esc 中止',
 	inUse: '（使用中）',
 	editTitle: '編集 — Enterで保存、Escで中止',
+	voice: {
+		hint: 'Tab: 話す',
+		off: '音声入力はオフです。設定ファイルで "voice.enabled": true にし（または PURFECT_VOICE_ENABLED=1）、プロバイダーのキーを追加してください',
+		recording: (seconds, max) => `録音中 ${seconds}秒 / ${max}秒 — Tab か Enter で停止、Esc でキャンセル`,
+		transcribing: '文字起こし中…（Esc でキャンセル）',
+		noSpeech: '音声を認識できませんでした。ターミナルアプリにマイクの使用が許可されているか確認してください（macOS: システム設定 → プライバシーとセキュリティ → マイク）',
+		error: reason => `音声入力に失敗しました: ${reason}`,
+		done: detail => `文字起こししました（${detail}）。必要なら編集して Enter を押してください`,
+	},
 	settings: {
 		title: '設定 — ↑↓ 選択 · Enter 変更 · Esc 戻る',
 		pick: label => `${label} — ↑↓ 選択 · Enter 保存 · Esc 中止`,
@@ -491,6 +580,7 @@ const zh: Messages = {
 		approve: '批准此提示词并关闭（空回车也可以）',
 		edit: '手动编辑改写后的提示词',
 		improve: '建议改进：更清晰，缺失处用 [空白?] 留给你填写',
+		voice: '用语音下达指令，代替打字（需开启语音输入）',
 		history: '查看所有版本，选择一个继续',
 		undo: '回到上一个版本',
 		redo: '从原始草稿重新改写（作为新版本）',
@@ -526,6 +616,15 @@ const zh: Messages = {
 	historyTitle: '版本历史 — ↑↓ 选择 · 回车从此版本继续 · Esc 取消',
 	inUse: '（当前）',
 	editTitle: '编辑 — 回车保存，Esc 取消',
+	voice: {
+		hint: 'Tab：说话',
+		off: '语音输入未开启。请在配置文件中设置 "voice.enabled": true（或 PURFECT_VOICE_ENABLED=1）并添加服务商密钥',
+		recording: (seconds, max) => `录音中 ${seconds}秒 / ${max}秒 — Tab 或 Enter 停止，Esc 取消`,
+		transcribing: '转写中…（Esc 取消）',
+		noSpeech: '未识别到语音。请确认终端应用有权使用麦克风（macOS：系统设置 → 隐私与安全性 → 麦克风）',
+		error: reason => `语音输入失败：${reason}`,
+		done: detail => `已转写（${detail}）。如有需要请修改，然后按 Enter`,
+	},
 	settings: {
 		title: '设置 — ↑↓ 选择 · 回车修改 · Esc 返回',
 		pick: label => `${label} — ↑↓ 选择 · 回车保存 · Esc 取消`,
@@ -546,6 +645,7 @@ const ko: Messages = {
 		approve: '이 프롬프트를 승인하고 닫기 (빈 Enter도 동일)',
 		edit: '다시 쓴 프롬프트를 직접 편집',
 		improve: '개선 제안: 더 명확하게, 빠진 부분은 [빈칸?]으로 남김',
+		voice: '입력하는 대신 말로 지시하기 (음성 입력을 켜야 함)',
 		history: '모든 버전을 보고 이어서 작업할 버전 선택',
 		undo: '이전 버전으로 돌아가기',
 		redo: '원본 초안에서 다시 쓰기 (새 버전으로)',
@@ -581,6 +681,15 @@ const ko: Messages = {
 	historyTitle: '버전 기록 — ↑↓ 선택 · Enter로 이 버전에서 계속 · Esc 취소',
 	inUse: ' (사용 중)',
 	editTitle: '편집 — Enter로 저장, Esc로 취소',
+	voice: {
+		hint: 'Tab: 말하기',
+		off: '음성 입력이 꺼져 있습니다. 설정 파일에서 "voice.enabled": true로 설정하고(또는 PURFECT_VOICE_ENABLED=1) 제공업체 키를 추가하세요',
+		recording: (seconds, max) => `녹음 중 ${seconds}초 / ${max}초 — Tab 또는 Enter로 중지, Esc로 취소`,
+		transcribing: '받아쓰는 중… (Esc로 취소)',
+		noSpeech: '음성을 인식하지 못했습니다. 터미널 앱이 마이크를 사용할 수 있는지 확인하세요 (macOS: 시스템 설정 → 개인정보 보호 및 보안 → 마이크)',
+		error: reason => `음성 입력 실패: ${reason}`,
+		done: detail => `받아쓰기 완료 (${detail}). 필요하면 수정한 뒤 Enter를 누르세요`,
+	},
 	settings: {
 		title: '설정 — ↑↓ 선택 · Enter 변경 · Esc 뒤로',
 		pick: label => `${label} — ↑↓ 선택 · Enter 저장 · Esc 취소`,

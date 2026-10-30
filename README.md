@@ -133,6 +133,63 @@ API prices; models not in the table, including provider-prefixed ids, show no co
 estimates for comparison; usage counts against your plan limits instead. Typical rewrite:
 Haiku ~$0.0005, Luna ~$0.0015 (Codex sends ~13k input tokens vs ~1.2k for Claude).
 
+## Voice input
+
+Speak instead of typing. Two places use it:
+
+- **Empty draft:** open purfect (Ctrl+G) with nothing written, press `Tab`, and talk. The text lands
+  in the draft box for you to check; Enter rewrites it.
+- **Review screen:** press `Tab` on an empty chat box (or type `/voice`) and say what to change
+  ("shorter", "add a test requirement"). The text lands in the chat box; Enter applies it.
+
+`Tab` or `Enter` stops recording, `Esc` cancels. Recording ends by itself after `maxSeconds`.
+Always read the text before sending: names such as `parseConfig` are often misheard.
+
+Voice is **off by default** and is separate from the rewrite: its own block in the config file,
+its own `PURFECT_VOICE_*` variables, its own key and endpoint. Nothing is shared with the
+`openai` backend, and `OPENAI_API_KEY` / `PURFECT_API_KEY` are never used for voice.
+
+```json
+{
+  "voice": {
+    "enabled": true,
+    "provider": "openai",
+    "providers": { "openai": { "apiKey": "sk-…" } }
+  }
+}
+```
+
+| Setting                        | Env var                         | Default                       |
+| ------------------------------ | ------------------------------- | ----------------------------- |
+| `voice.enabled`                | `PURFECT_VOICE_ENABLED`         | `false`                       |
+| `voice.autoStart`              | `PURFECT_VOICE_AUTO_START`      | `false` (record on opening an empty draft) |
+| `voice.provider`               | `PURFECT_VOICE_PROVIDER`        | `openai`                      |
+| `voice.maxSeconds`             | `PURFECT_VOICE_MAX_SECONDS`     | `60` (1 to 300)               |
+| `voice.device`                 | `PURFECT_VOICE_DEVICE`          | the system microphone         |
+| `voice.providers.<id>.apiKey`  | `PURFECT_VOICE_<ID>_API_KEY`    | none                          |
+| `voice.providers.<id>.baseUrl` | `PURFECT_VOICE_<ID>_BASE_URL`   | the provider's own            |
+| `voice.providers.<id>.model`   | `PURFECT_VOICE_<ID>_MODEL`      | the provider's own            |
+
+Requirements: `ffmpeg` on the PATH (macOS: `brew install ffmpeg`), and permission for your
+terminal app to use the microphone (macOS: System Settings → Privacy & Security → Microphone).
+The audio is sent to the provider, so voice stays off until you turn it on.
+
+The `openai` provider calls `/audio/transcriptions` with `gpt-transcribe` (listed at about
+$0.0045 per minute; purfect shows the cost after each use). Only macOS has been tested.
+
+### Adding a provider
+
+Providers sit behind one interface in `src/voice/types.ts`, in two shapes:
+
+- **batch** (`transcribe(pcm, signal)`): one request with the whole recording after you stop.
+- **live** (`open(handlers, signal)`): audio is streamed while you speak, partial text arrives
+  through `onPartial`, and `finish()` returns the final text.
+
+Audio is always 16 kHz mono 16-bit PCM. To add one, write a file under `src/voice/providers/`
+that exports a `ProviderDefinition` (`defaults` and `create(settings)`) and register it in
+`src/voice/providers/index.ts`. Its settings then work under `voice.providers.<id>` and
+`PURFECT_VOICE_<ID>_*` with no other change.
+
 ## Rewrite rules
 
 The Prompt tutor's checks follow Anthropic's
@@ -162,6 +219,7 @@ The chat box under the result is always on:
 | `/approve` | Approve this prompt and close                         |
 | `/edit`    | Edit the rewritten prompt by hand                     |
 | `/improve` | Make the prompt clearer; gaps become `[...?]` to fill |
+| `/voice`   | Speak an instruction instead of typing it (needs voice on) |
 | `/history` | List every version, pick one to continue from         |
 | `/undo`    | Go to the previous version                            |
 | `/redo`    | Rewrite again from the original draft (a new version) |

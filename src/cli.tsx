@@ -5,6 +5,9 @@ import {Box, Text, render, useApp, useInput} from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
 import {languageLabel, loadConfig, saveSetting, type Config, type SettingKey} from './config.js';
+import {loadVoiceConfig, type VoiceConfig} from './voice/config.js';
+import {NoSpeechError} from './voice/dictation.js';
+import {useDictation} from './voice/use-dictation.js';
 import {COMMAND_NAMES, messages} from './i18n.js';
 import {rewrite, type Refine, type Rewrite, type Usage} from './rewrite.js';
 import {Settings} from './settings.js';
@@ -27,6 +30,15 @@ try {
 	process.exit(1);
 }
 
+// Voice input has its own config. A mistake in it only disables voice, with the reason shown when used.
+let voice: VoiceConfig | undefined;
+let voiceProblem: string | undefined;
+try {
+	voice = loadVoiceConfig();
+} catch (e) {
+	voiceProblem = (e as Error).message;
+}
+
 let approved: string | undefined;
 
 function App() {
@@ -43,6 +55,8 @@ function App() {
 	const [highlight, setHighlight] = useState(0);
 	const [chat, setChat] = useState('');
 	const [chatKey, setChatKey] = useState(0); // remounting the input is how Tab moves its cursor to the end
+	const [draftKey, setDraftKey] = useState(0); // same for the draft box, after voice adds text
+	const dictation = useDictation(voice);
 	const [pick, setPick] = useState(0);
 	const [refining, setRefining] = useState<{instruction: string; improve?: boolean}>(); // unset for a plain rewrite
 	const [warnedFor, setWarnedFor] = useState<string>(); // prompt we already warned about unfilled placeholders
@@ -112,6 +126,50 @@ function App() {
 
 	const move = (index: number, length: number, delta: number) => (index + delta + length) % length;
 
+	// Speech becomes text in the draft (compose) or the chat box (review); the user checks it, then presses Enter.
+	const startVoice = (into: 'draft' | 'chat') => {
+		setNotice(undefined);
+		if (!voice?.enabled) return setNotice(voiceProblem ?? msgs.voice.off);
+		try {
+			dictation.start({
+				onText: t => {
+					if (into === 'draft') {
+						setDraft(d => (d.trim() ? `${d.trim()} ${t.text}` : t.text));
+						setDraftKey(k => k + 1);
+					} else {
+						setChat(t.text);
+						setChatKey(k => k + 1);
+					}
+					const detail = [t.seconds !== undefined && `${Math.round(t.seconds)}s`, t.costUsd !== undefined && `~$${t.costUsd.toFixed(t.costUsd < 0.001 ? 5 : 4)}`].filter(Boolean).join(' · ');
+					setNotice(msgs.voice.done(detail), true);
+				},
+				onError: e => setNotice(e instanceof NoSpeechError ? msgs.voice.noSpeech : msgs.voice.error(e.message)),
+			});
+		} catch (e) {
+			setNotice(msgs.voice.error((e as Error).message));
+		}
+	};
+
+	// An empty Ctrl+G can open straight into recording.
+	useEffect(() => {
+		if (voice?.enabled && voice.autoStart && stage === 'compose') startVoice('draft');
+	}, []);
+
+	// Tab starts and stops recording. While it runs, Enter stops it instead of sending the box.
+	useInput(
+		(_input, key) => {
+			if (dictation.phase === 'recording') {
+				if (key.tab || key.return) void dictation.stop();
+				else if (key.escape) dictation.cancel();
+			} else if (dictation.phase === 'transcribing') {
+				if (key.escape) dictation.cancel();
+			} else if (key.tab) {
+				startVoice(stage === 'compose' ? 'draft' : 'chat');
+			}
+		},
+		{isActive: dictation.phase !== 'idle' || stage === 'compose' || (stage === 'review' && chat === '')},
+	);
+
 	useInput(
 		(_input, key) => {
 			if (stage === 'rewriting') {
@@ -139,7 +197,7 @@ function App() {
 				}
 			}
 		},
-		{isActive: stage !== 'compose' && stage !== 'config'},
+		{isActive: stage !== 'compose' && stage !== 'config' && dictation.phase === 'idle'},
 	);
 
 	const runCommand = (command: string) => {
@@ -160,6 +218,8 @@ function App() {
 		} else if (command === 'edit') {
 			setEdited(result!.prompt);
 			setStage('edit');
+		} else if (command === 'voice') {
+			startVoice('chat');
 		} else if (command === 'tutor') {
 			// One switch for both tutors: off if either is on, otherwise on. Fine control is in /config.
 			const enable = !(cfg.languageTutor || cfg.promptTutor);
@@ -214,8 +274,9 @@ function App() {
 					<Text bold>{msgs.composeTitle}</Text>
 					<Box>
 						<Text color="cyan">› </Text>
-						<TextInput value={draft} onChange={setDraft} onSubmit={value => value.trim() && startRewrite(true)} />
+						<TextInput key={draftKey} value={draft} focus={dictation.phase === 'idle'} onChange={setDraft} onSubmit={value => value.trim() && startRewrite(true)} />
 					</Box>
+					<VoiceStatus voice={voice} dictation={dictation} msgs={msgs} showHint />
 				</Box>
 			) : (
 				<Box flexDirection="column">
@@ -276,7 +337,7 @@ function App() {
 
 			{stage === 'review' && result?.usage && !error && <UsageLine usage={result.usage} />}
 
-			{stage === 'review' && noticeState && <Text color={noticeState.info ? 'green' : 'red'}>{noticeState.text}</Text>}
+			{(stage === 'review' || stage === 'compose') && noticeState && <Text color={noticeState.info ? 'green' : 'red'}>{noticeState.text}</Text>}
 
 			{stage === 'review' && (
 				<Box flexDirection="column">
@@ -294,6 +355,7 @@ function App() {
 						<TextInput
 							key={chatKey}
 							value={chat}
+							focus={dictation.phase === 'idle'}
 							onChange={value => {
 								setChat(value);
 								setPick(0);
@@ -301,6 +363,7 @@ function App() {
 							onSubmit={submitChat}
 						/>
 					</Box>
+					<VoiceStatus voice={voice} dictation={dictation} msgs={msgs} showHint={chat === ''} />
 					{suggestions.length > 0 && (
 						<Box flexDirection="column">
 							{suggestions.map(c => (
@@ -352,6 +415,31 @@ function App() {
 			)}
 		</Box>
 	);
+}
+
+type Dictation = ReturnType<typeof useDictation>;
+
+// Recording and transcribing progress, or a hint that Tab speaks (only when voice is on).
+function VoiceStatus({voice, dictation, msgs, showHint}: {voice?: VoiceConfig; dictation: Dictation; msgs: ReturnType<typeof messages>; showHint: boolean}) {
+	if (dictation.phase === 'recording') {
+		return (
+			<Box flexDirection="column">
+				<Text color="red">● {msgs.voice.recording(dictation.seconds, voice!.maxSeconds)}</Text>
+				{dictation.partial && <Text dimColor>{dictation.partial}</Text>}
+			</Box>
+		);
+	}
+	if (dictation.phase === 'transcribing') {
+		return (
+			<Text>
+				<Text color="green">
+					<Spinner type="dots" />
+				</Text>{' '}
+				{msgs.voice.transcribing}
+			</Text>
+		);
+	}
+	return voice?.enabled && showHint ? <Text dimColor>{msgs.voice.hint}</Text> : null;
 }
 
 function UsageLine({usage}: {usage: Usage}) {

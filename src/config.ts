@@ -192,7 +192,7 @@ function setPath(data: Record<string, unknown>, path: readonly string[], value: 
 	else node[last] = value;
 }
 
-function readRawConfig(): Record<string, unknown> {
+export function readRawConfig(): Record<string, unknown> {
 	let text: string;
 	try {
 		text = readFileSync(CONFIG_PATH, 'utf8');
@@ -283,7 +283,7 @@ function detectHostCli(): Backend | undefined {
 	return undefined;
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
+export function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -294,7 +294,7 @@ function check<T extends string>(value: unknown, allowed: readonly T[], source: 
 }
 
 // Accepts true/false, or 1/0, on/off, yes/no as text (environment variables are always text).
-function parseBoolean(value: unknown, source: string): boolean | undefined {
+export function parseBoolean(value: unknown, source: string): boolean | undefined {
 	if (value === undefined || value === '') return undefined;
 	if (typeof value === 'boolean') return value;
 	const word = typeof value === 'string' ? value.trim().toLowerCase() : '';
