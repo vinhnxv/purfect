@@ -170,6 +170,7 @@ its own `PURFECT_VOICE_*` variables, its own key and endpoint. Nothing is shared
 | `voice.providers.<id>.apiKey`  | `PURFECT_VOICE_<ID>_API_KEY`    | none                          |
 | `voice.providers.<id>.baseUrl` | `PURFECT_VOICE_<ID>_BASE_URL`   | the provider's own            |
 | `voice.providers.<id>.model`   | `PURFECT_VOICE_<ID>_MODEL`      | the provider's own            |
+| `voice.providers.<id>.language` | `PURFECT_VOICE_<ID>_LANGUAGE`  | the provider's own (only `speechmatics` needs one) |
 
 Requirements: `ffmpeg` on the PATH (macOS: `brew install ffmpeg`), and permission for your
 terminal app to use the microphone (macOS: System Settings → Privacy & Security → Microphone).
@@ -182,6 +183,12 @@ Providers:
 - `dashscope`: Alibaba Cloud Model Studio, `qwen-audio-3.1-asr-flash`, which takes up to five
   minutes of audio per request. No price is known to purfect, so no cost is shown. See
   [DashScope](#dashscope) for the key and host.
+- `speechmatics`: Speechmatics Agent STT (`linden-1`), streamed over a WebSocket, so the words
+  appear while you speak and the last ones arrive right after you stop. It needs the language
+  up front (`"auto"` is rejected): set `voice.providers.speechmatics.language` or
+  `PURFECT_VOICE_SPEECHMATICS_LANGUAGE`; the default is `en`. Other codes the service accepted when
+  tried include `vi`, `fr`, `de`, `es`, `ja`, `ko`, `pt`, `it` and `cmn` (Mandarin; `zh` is
+  rejected). No price is known to purfect, so no cost is shown. See [Speechmatics](#speechmatics).
 
 Only macOS has been tested.
 
@@ -247,6 +254,11 @@ is upper-cased with `-` as `_`, e.g. `PURFECT_SPEECH_OPENAI_REALTIME_API_KEY`):
   over its WebSocket. Listed at $0.30 per 10,000 characters (Singapore). See [DashScope](#dashscope)
   for the key and host.
 
+- `speechmatics`: Speechmatics text to speech (preview), voice `sarah`; the others are `theo` (UK) and
+  `megan`, `jack` (US). It has **English voices only**, so `/speak` is hidden, and says why when
+  typed, while the target language is not English. An unknown voice name is not an error: the
+  service falls back to a default voice. See [Speechmatics](#speechmatics).
+
 Texts over 4096 characters (2000 for `dashscope`) are refused. The cost of a reading is not shown.
 
 The last finished reading is kept in memory, so `/speak` on the same text, provider, model and
@@ -267,12 +279,28 @@ They are only fallbacks. `PURFECT_VOICE_DASHSCOPE_*` / `PURFECT_SPEECH_DASHSCOPE
 `voice.providers.dashscope` / `speech.providers.dashscope` blocks win, so voice and speech can still
 use different keys. Select it with `"provider": "dashscope"` in the `voice` or `speech` block.
 
+### Speechmatics
+
+The `speechmatics` provider for voice input and for reading aloud reads one standard variable:
+
+| Variable               | Meaning       |
+| ---------------------- | ------------- |
+| `SPEECHMATICS_API_KEY` | The API key.  |
+
+It is only a fallback. `PURFECT_VOICE_SPEECHMATICS_API_KEY` / `PURFECT_SPEECH_SPEECHMATICS_API_KEY` and
+the `voice.providers.speechmatics` / `speech.providers.speechmatics` blocks win, so voice and speech
+can still use different keys. Select it with `"provider": "speechmatics"` in the `voice` or `speech`
+block. Its default hosts are `global.rt.speechmatics.com` (speech to text, which routes to the
+nearest region; pin one with `baseUrl`, e.g. `https://eu.rt.speechmatics.com`) and
+`preview.tts.speechmatics.com` (text to speech).
+
 ### Adding a speech provider
 
 A provider is a `Synthesizer` (`src/speech/types.ts`): `synthesize(text, onAudio, signal)` calls
 `onAudio` with mono 16-bit PCM at the provider's `sampleRate`, as it arrives. A service that returns
 the whole clip calls it once; a streaming one (chunked HTTP, WebSocket) calls it many times, and
 nothing else changes. `openai` (chunked HTTP) and `openai-realtime` (WebSocket) are the two examples.
+A provider that reads only some languages lists them in `languages`; `/speak` then refuses the others.
 Write a file under `src/speech/providers/` that exports a
 `SynthesizerDefinition` (`defaults` and `create(settings)`) and register it in
 `src/speech/providers/index.ts`. Its settings then work under `speech.providers.<id>` and

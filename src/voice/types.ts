@@ -34,7 +34,7 @@ export type SpeechProvider = BatchProvider | LiveProvider;
 
 // The fields every provider may be given in the config file or environment. A provider uses the
 // ones it needs and ignores the rest.
-export type ProviderSettings = {apiKey?: string; baseUrl?: string; model?: string};
+export type ProviderSettings = {apiKey?: string; baseUrl?: string; model?: string; language?: string};
 
 // How a provider registers itself. `create` receives the user's settings merged over `defaults`,
 // and throws a readable error when something required (an API key, say) is missing.

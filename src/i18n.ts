@@ -37,6 +37,8 @@ export type Messages = {
 		loading: string;
 		speaking: string;
 		tooLong: (length: number, max: number) => string;
+		// The voice reads only some languages; `only` lists them.
+		unsupported: (language: string, only: string) => string;
 		error: (reason: string) => string;
 	};
 	ide: {
@@ -117,6 +119,7 @@ const en: Messages = {
 		loading: 'Preparing the audio… (Esc to cancel)',
 		speaking: 'Speaking (AI-generated voice) — /speak or Esc to stop',
 		tooLong: (length, max) => `Too long to read aloud: ${length} characters, the provider accepts ${max}`,
+		unsupported: (language, only) => `This voice reads only ${only}, not ${language}`,
 		error: reason => `Reading aloud failed: ${reason}`,
 	},
 	ide: {
@@ -197,6 +200,7 @@ const vi: Messages = {
 		loading: 'Đang chuẩn bị âm thanh… (Esc để huỷ)',
 		speaking: 'Đang đọc (giọng do AI tạo) — /speak hoặc Esc để dừng',
 		tooLong: (length, max) => `Quá dài để đọc: ${length} ký tự, provider nhận tối đa ${max}`,
+		unsupported: (language, only) => `Giọng này chỉ đọc được ${only}, không đọc được ${language}`,
 		error: reason => `Đọc to thất bại: ${reason}`,
 	},
 	ide: {
@@ -277,6 +281,7 @@ const fr: Messages = {
 		loading: 'Préparation de l\'audio… (Échap pour annuler)',
 		speaking: 'Lecture en cours (voix générée par IA) — /speak ou Échap pour arrêter',
 		tooLong: (length, max) => `Trop long pour être lu : ${length} caractères, le fournisseur en accepte ${max}`,
+		unsupported: (language, only) => `Cette voix ne lit que ${only}, pas ${language}`,
 		error: reason => `Échec de la lecture à voix haute : ${reason}`,
 	},
 	ide: {
@@ -357,6 +362,7 @@ const de: Messages = {
 		loading: 'Audio wird vorbereitet… (Esc zum Abbrechen)',
 		speaking: 'Wird vorgelesen (KI-generierte Stimme) — /speak oder Esc zum Stoppen',
 		tooLong: (length, max) => `Zu lang zum Vorlesen: ${length} Zeichen, der Anbieter akzeptiert ${max}`,
+		unsupported: (language, only) => `Diese Stimme liest nur ${only}, nicht ${language}`,
 		error: reason => `Vorlesen fehlgeschlagen: ${reason}`,
 	},
 	ide: {
@@ -437,6 +443,7 @@ const it: Messages = {
 		loading: 'Preparazione dell\'audio… (Esc per annullare)',
 		speaking: 'Lettura in corso (voce generata dall\'IA) — /speak o Esc per fermare',
 		tooLong: (length, max) => `Troppo lungo da leggere: ${length} caratteri, il provider ne accetta ${max}`,
+		unsupported: (language, only) => `Questa voce legge solo ${only}, non ${language}`,
 		error: reason => `Lettura ad alta voce non riuscita: ${reason}`,
 	},
 	ide: {
@@ -517,6 +524,7 @@ const es: Messages = {
 		loading: 'Preparando el audio… (Esc para cancelar)',
 		speaking: 'Leyendo (voz generada por IA) — /speak o Esc para detener',
 		tooLong: (length, max) => `Demasiado largo para leer: ${length} caracteres, el proveedor admite ${max}`,
+		unsupported: (language, only) => `Esta voz solo lee ${only}, no ${language}`,
 		error: reason => `Falló la lectura en voz alta: ${reason}`,
 	},
 	ide: {
@@ -597,6 +605,7 @@ const pt: Messages = {
 		loading: 'Preparando o áudio… (Esc para cancelar)',
 		speaking: 'Lendo (voz gerada por IA) — /speak ou Esc para parar',
 		tooLong: (length, max) => `Longo demais para ler: ${length} caracteres, o provedor aceita ${max}`,
+		unsupported: (language, only) => `Esta voz só lê ${only}, não ${language}`,
 		error: reason => `Falha na leitura em voz alta: ${reason}`,
 	},
 	ide: {
@@ -677,6 +686,7 @@ const ja: Messages = {
 		loading: '音声を準備中…（Esc でキャンセル）',
 		speaking: '読み上げ中（AI 生成の音声）— /speak または Esc で停止',
 		tooLong: (length, max) => `長すぎて読み上げられません: ${length} 文字（上限 ${max}）`,
+		unsupported: (language, only) => `この音声は ${only} のみ読み上げられます（${language} は不可）`,
 		error: reason => `読み上げに失敗しました: ${reason}`,
 	},
 	ide: {
@@ -757,6 +767,7 @@ const zh: Messages = {
 		loading: '正在准备音频…（Esc 取消）',
 		speaking: '正在朗读（AI 生成的语音）— /speak 或 Esc 停止',
 		tooLong: (length, max) => `太长，无法朗读：${length} 个字符，提供商最多接受 ${max}`,
+		unsupported: (language, only) => `该语音只能朗读 ${only}，不能朗读 ${language}`,
 		error: reason => `朗读失败：${reason}`,
 	},
 	ide: {
@@ -837,6 +848,7 @@ const ko: Messages = {
 		loading: '오디오 준비 중… (Esc로 취소)',
 		speaking: '읽는 중 (AI 생성 음성) — /speak 또는 Esc로 중지',
 		tooLong: (length, max) => `너무 길어서 읽을 수 없습니다: ${length}자 (최대 ${max}자)`,
+		unsupported: (language, only) => `이 음성은 ${only}만 읽을 수 있고 ${language}는 읽을 수 없습니다`,
 		error: reason => `읽기 실패: ${reason}`,
 	},
 	ide: {

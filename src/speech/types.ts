@@ -12,6 +12,8 @@ export type Synthesizer = {
 
 export type SynthesizerDefinition = {
 	defaults: SpeechSettings;
+	// The target languages it can read; every language when unset.
+	languages?: readonly string[];
 	// Throws when the settings are unusable (no API key, say), before any request is made.
 	create(settings: SpeechSettings): Synthesizer;
 };

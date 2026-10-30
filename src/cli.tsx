@@ -8,6 +8,7 @@ import {IPA_LANGUAGES, languageLabel, loadConfig, saveSetting, type Config, type
 import {loadVoiceConfig, type VoiceConfig} from './voice/config.js';
 import {NoSpeechError} from './voice/dictation.js';
 import {loadSpeechConfig, type SpeechConfig} from './speech/config.js';
+import {SYNTHESIZERS} from './speech/providers/index.js';
 import {TooLongError} from './speech/speak.js';
 import {useSpeech} from './speech/use-speech.js';
 import {useDictation} from './voice/use-dictation.js';
@@ -51,6 +52,12 @@ try {
 } catch (e) {
 	speechProblem = (e as Error).message;
 }
+
+// Some voices read only some languages (Speechmatics: English only). Without a speech config nothing blocks.
+const speaksTarget = (language: string) => {
+	const only = speech && SYNTHESIZERS[speech.provider]?.languages;
+	return !only || only.includes(language);
+};
 
 let approved: string | undefined;
 
@@ -176,7 +183,7 @@ function App() {
 
 	// Commands matching what is typed after "/", minus the ones that cannot run right now.
 	const available = (name: string) =>
-		name === 'undo' ? current > 0 : name === 'history' ? versions.length > 1 : name === 'approve' || name === 'edit' || name === 'ide' || name === 'speak' || name === 'improve' ? canUse : name === 'ipa' ? canUse && IPA_LANGUAGES.includes(cfg.targetLanguage) : true;
+		name === 'undo' ? current > 0 : name === 'history' ? versions.length > 1 : name === 'approve' || name === 'edit' || name === 'ide' || name === 'improve' ? canUse : name === 'speak' ? canUse && speaksTarget(cfg.targetLanguage) : name === 'ipa' ? canUse && IPA_LANGUAGES.includes(cfg.targetLanguage) : true;
 	const commands = COMMAND_NAMES.map(name => ({name, desc: msgs.commands[name]}));
 	const suggestions =
 		stage === 'review' && chat.startsWith('/') && !chat.includes(' ')
@@ -264,6 +271,10 @@ function App() {
 		setNotice(undefined);
 		if (!(COMMAND_NAMES as readonly string[]).includes(command)) return setNotice(msgs.unknownCommand(command));
 		if (command === 'ipa' && !IPA_LANGUAGES.includes(cfg.targetLanguage)) return setNotice(msgs.ipa.unsupported(languageLabel(cfg.targetLanguage)));
+		if (command === 'speak' && speech?.enabled && !speaksTarget(cfg.targetLanguage)) {
+			const only = SYNTHESIZERS[speech.provider]!.languages!.map(code => languageLabel(code as Config['targetLanguage']));
+			return setNotice(msgs.speech.unsupported(languageLabel(cfg.targetLanguage), only.join(', ')));
+		}
 		if (!available(command)) return setNotice(msgs.unavailable(command));
 		if (command === 'approve') {
 			// Improve mode leaves "[...?]" placeholders; make approving them as-is a deliberate second step.

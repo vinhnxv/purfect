@@ -48,6 +48,6 @@ export function loadVoiceConfig(): VoiceConfig {
 		provider,
 		maxSeconds,
 		device: env('DEVICE') ?? text(file.device, '"voice.device"'),
-		settings: {apiKey: setting('apiKey', 'API_KEY'), baseUrl: setting('baseUrl', 'BASE_URL'), model: setting('model', 'MODEL')},
+		settings: {apiKey: setting('apiKey', 'API_KEY'), baseUrl: setting('baseUrl', 'BASE_URL'), model: setting('model', 'MODEL'), language: setting('language', 'LANGUAGE')},
 	};
 }

@@ -1,6 +1,5 @@
+import {streamHttpAudio} from '../http.js';
 import type {SynthesizerDefinition} from '../types.js';
-
-const CONNECT_TIMEOUT_MS = 30_000;
 
 // OpenAI's /audio/speech endpoint, or any server that speaks the same API. The audio is requested as
 // raw 24 kHz PCM and read as it streams, so playback can start before the clip is complete.
@@ -13,32 +12,8 @@ export const openai: SynthesizerDefinition = {
 		return {
 			sampleRate: 24_000,
 			maxChars: 4096,
-			async synthesize(text, onAudio, signal) {
-				// The timeout covers only waiting for the first response, not the whole clip.
-				const connect = new AbortController();
-				const timer = setTimeout(() => connect.abort(), CONNECT_TIMEOUT_MS);
-				let res: Response;
-				try {
-					res = await fetch(url, {
-						method: 'POST',
-						headers: {Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json'},
-						body: JSON.stringify({model, voice, input: text, response_format: 'pcm'}),
-						signal: AbortSignal.any([signal, connect.signal]),
-					});
-				} finally {
-					clearTimeout(timer);
-				}
-				if (!res.ok) {
-					const body = (await res.json().catch(() => ({}))) as {error?: {message?: string}};
-					throw new Error(`HTTP ${res.status}: ${body.error?.message ?? res.statusText}`);
-				}
-				const reader = res.body!.getReader();
-				for (;;) {
-					const {done, value} = await reader.read();
-					if (done) return;
-					onAudio(Buffer.from(value));
-				}
-			},
+			synthesize: (text, onAudio, signal) =>
+				streamHttpAudio({url, headers: {Authorization: `Bearer ${apiKey}`}, body: {model, voice, input: text, response_format: 'pcm'}, signal}, onAudio),
 		};
 	},
 };
