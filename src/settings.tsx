@@ -12,6 +12,7 @@ const KEYS: SettingKey[] = [
 	'backend',
 	'model',
 	'effort',
+	'ide',
 	'rewriteInstructions',
 	'languageInstructions',
 	'promptInstructions',

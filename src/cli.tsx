@@ -10,9 +10,10 @@ import {NoSpeechError} from './voice/dictation.js';
 import {useDictation} from './voice/use-dictation.js';
 import {COMMAND_NAMES, messages} from './i18n.js';
 import {rewrite, type Refine, type Rewrite, type Usage} from './rewrite.js';
+import {editInIde, resolveIde, type Ide} from './ide.js';
 import {Settings} from './settings.js';
 
-type Stage = 'compose' | 'rewriting' | 'review' | 'edit' | 'history' | 'config';
+type Stage = 'compose' | 'rewriting' | 'review' | 'edit' | 'ide' | 'history' | 'config';
 
 // One entry in the version history; label says how it came about (the instruction, or what was done).
 type Version = {result: Rewrite; label: string};
@@ -61,6 +62,7 @@ function App() {
 	const [refining, setRefining] = useState<{instruction: string; improve?: boolean}>(); // unset for a plain rewrite
 	const [warnedFor, setWarnedFor] = useState<string>(); // prompt we already warned about unfilled placeholders
 	const [edited, setEdited] = useState('');
+	const [ide, setIde] = useState<Ide>(); // the IDE the prompt is open in while stage is 'ide'
 	const [error, setError] = useState<string>();
 	const [noticeState, setNoticeState] = useState<{text: string; info?: boolean}>();
 	// Warnings are red; `info` marks a plain confirmation.
@@ -114,9 +116,28 @@ function App() {
 		return () => controller.abort();
 	}, [stage, draft]);
 
+	// /ide: the prompt opens in the IDE; closing the file there adds the saved text as a new version.
+	useEffect(() => {
+		if (stage !== 'ide' || !ide) return;
+		const controller = new AbortController();
+		editInIde(result!.prompt, ide, controller.signal).then(
+			text => {
+				if (text && text !== result!.prompt) addVersion({result: {prompt: text}, label: msgs.labels.manual});
+				else setNotice(msgs.ide.unchanged, true);
+				setStage('review');
+			},
+			(e: Error) => {
+				if (controller.signal.aborted) return;
+				setNotice(e.message);
+				setStage('review');
+			},
+		);
+		return () => controller.abort();
+	}, [stage, ide]);
+
 	// Commands matching what is typed after "/", minus the ones that cannot run right now.
 	const available = (name: string) =>
-		name === 'undo' ? current > 0 : name === 'history' ? versions.length > 1 : name === 'approve' || name === 'edit' || name === 'improve' ? canUse : true;
+		name === 'undo' ? current > 0 : name === 'history' ? versions.length > 1 : name === 'approve' || name === 'edit' || name === 'ide' || name === 'improve' ? canUse : true;
 	const commands = COMMAND_NAMES.map(name => ({name, desc: msgs.commands[name]}));
 	const suggestions =
 		stage === 'review' && chat.startsWith('/') && !chat.includes(' ')
@@ -174,7 +195,7 @@ function App() {
 		(_input, key) => {
 			if (stage === 'rewriting') {
 				if (key.escape) setStage(versions.length > 0 ? 'review' : 'compose');
-			} else if (stage === 'edit') {
+			} else if (stage === 'edit' || stage === 'ide') {
 				if (key.escape) setStage('review');
 			} else if (stage === 'history') {
 				if (key.escape) setStage('review');
@@ -218,6 +239,13 @@ function App() {
 		} else if (command === 'edit') {
 			setEdited(result!.prompt);
 			setStage('edit');
+		} else if (command === 'ide') {
+			try {
+				setIde(resolveIde(cfg.ide));
+				setStage('ide');
+			} catch (e) {
+				setNotice((e as Error).message);
+			}
 		} else if (command === 'voice') {
 			startVoice('chat');
 		} else if (command === 'tutor') {
@@ -298,7 +326,16 @@ function App() {
 				</Text>
 			)}
 
-			{stage === 'review' && error && <Text color="red">{msgs.error(error)}</Text>}
+			{stage === 'ide' && ide && (
+			<Text>
+				<Text color="green">
+					<Spinner type="dots" />
+				</Text>{' '}
+				{msgs.ide.waiting(ide.name)}
+			</Text>
+		)}
+
+		{stage === 'review' && error && <Text color="red">{msgs.error(error)}</Text>}
 
 			{stage === 'review' && result && !error && (
 				<Box flexDirection="column" gap={1}>

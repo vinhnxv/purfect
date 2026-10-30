@@ -1,7 +1,7 @@
 import type {DisplayCode, SettingKey} from './config.js';
 
 // Slash commands of the review chat box, in the order they are suggested.
-export const COMMAND_NAMES = ['approve', 'edit', 'improve', 'voice', 'history', 'undo', 'redo', 'back', 'tutor', 'config', 'quit'] as const;
+export const COMMAND_NAMES = ['approve', 'edit', 'ide', 'improve', 'voice', 'history', 'undo', 'redo', 'back', 'tutor', 'config', 'quit'] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 // Every string the interface shows. The model's own output (explanations, tips) is not here:
@@ -31,6 +31,10 @@ export type Messages = {
 	historyTitle: string;
 	inUse: string;
 	editTitle: string;
+	ide: {
+		waiting: (name: string) => string;
+		unchanged: string;
+	};
 	voice: {
 		hint: string;
 		off: string;
@@ -59,6 +63,7 @@ const en: Messages = {
 	commands: {
 		approve: 'Approve this prompt and close (an empty Enter does the same)',
 		edit: 'Edit the rewritten prompt by hand',
+		ide: 'Edit the rewritten prompt in your IDE (VS Code, Cursor, …)',
 		improve: 'Suggest improvements: clearer, with [blanks?] for you to fill in',
 		voice: 'Speak an instruction instead of typing it (needs voice input on)',
 		history: 'See every version, pick one to continue from',
@@ -96,6 +101,10 @@ const en: Messages = {
 	historyTitle: 'Version history — ↑↓ select · Enter to continue from this version · Esc to cancel',
 	inUse: ' (current)',
 	editTitle: 'Edit — Enter to save, Esc to cancel',
+	ide: {
+		waiting: name => `Editing in ${name}… save and close the file to come back (Esc to cancel)`,
+		unchanged: 'No changes made, keeping the current version',
+	},
 	voice: {
 		hint: 'Tab: speak',
 		off: 'Voice input is off. Set "voice.enabled": true in the config file (or PURFECT_VOICE_ENABLED=1) and add the provider key',
@@ -109,7 +118,7 @@ const en: Messages = {
 		title: 'Settings — ↑↓ select · Enter change · Esc back',
 		pick: label => `${label} — ↑↓ select · Enter save · Esc cancel`,
 		text: label => `${label} — Enter save (blank = default) · Esc cancel`,
-		labels: {targetLanguage: 'Target language', displayLanguage: 'Display language', backend: 'Backend', model: 'Model', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Rewrite instructions', languageInstructions: 'Language tutor instructions', promptInstructions: 'Prompt tutor instructions'},
+		labels: {targetLanguage: 'Target language', displayLanguage: 'Display language', backend: 'Backend', model: 'Model', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Rewrite instructions', languageInstructions: 'Language tutor instructions', promptInstructions: 'Prompt tutor instructions', ide: 'IDE command'},
 		unset: '(default)',
 		on: 'on',
 		off: 'off',
@@ -124,6 +133,7 @@ const vi: Messages = {
 	commands: {
 		approve: 'Duyệt prompt này và đóng (Enter trống cũng vậy)',
 		edit: 'Tự sửa tay prompt đã rewrite',
+		ide: 'Sửa prompt đã rewrite trong IDE (VS Code, Cursor, …)',
 		improve: 'Gợi ý cải thiện prompt: rõ hơn, chỗ thiếu để [trống?] cho bạn điền',
 		voice: 'Nói chỉ dẫn thay vì gõ (cần bật nhập bằng giọng nói)',
 		history: 'Xem mọi phiên bản đã chỉnh, chọn một bản để làm tiếp',
@@ -161,6 +171,10 @@ const vi: Messages = {
 	historyTitle: 'Lịch sử phiên bản — ↑↓ chọn · Enter dùng bản này để làm tiếp · Esc huỷ',
 	inUse: ' (đang dùng)',
 	editTitle: 'Chỉnh sửa — Enter để lưu, Esc để huỷ',
+	ide: {
+		waiting: name => `Đang sửa trong ${name}… lưu và đóng file để quay lại (Esc để huỷ)`,
+		unchanged: 'Không có thay đổi, giữ nguyên phiên bản hiện tại',
+	},
 	voice: {
 		hint: 'Tab: nói',
 		off: 'Chưa bật nhập bằng giọng nói. Đặt "voice.enabled": true trong file config (hoặc PURFECT_VOICE_ENABLED=1) và thêm khoá của provider',
@@ -174,7 +188,7 @@ const vi: Messages = {
 		title: 'Cài đặt — ↑↓ chọn · Enter đổi · Esc quay lại',
 		pick: label => `${label} — ↑↓ chọn · Enter lưu · Esc huỷ`,
 		text: label => `${label} — Enter lưu (để trống = mặc định) · Esc huỷ`,
-		labels: {targetLanguage: 'Ngôn ngữ đích', displayLanguage: 'Ngôn ngữ hiển thị', backend: 'Backend', model: 'Model', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Chỉ dẫn thêm: rewrite', languageInstructions: 'Chỉ dẫn thêm: Language tutor', promptInstructions: 'Chỉ dẫn thêm: Prompt tutor'},
+		labels: {targetLanguage: 'Ngôn ngữ đích', displayLanguage: 'Ngôn ngữ hiển thị', backend: 'Backend', model: 'Model', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Chỉ dẫn thêm: rewrite', languageInstructions: 'Chỉ dẫn thêm: Language tutor', promptInstructions: 'Chỉ dẫn thêm: Prompt tutor', ide: 'Lệnh mở IDE'},
 		unset: '(mặc định)',
 		on: 'bật',
 		off: 'tắt',
@@ -189,6 +203,7 @@ const fr: Messages = {
 	commands: {
 		approve: 'Valider ce prompt et fermer (Entrée vide aussi)',
 		edit: 'Modifier à la main le prompt réécrit',
+		ide: 'Modifier le prompt réécrit dans votre IDE (VS Code, Cursor, …)',
 		improve: 'Suggérer des améliorations : plus clair, avec des [blancs ?] à remplir',
 		voice: 'Dicter une consigne au lieu de la taper (saisie vocale à activer)',
 		history: 'Voir toutes les versions, en choisir une pour continuer',
@@ -226,6 +241,10 @@ const fr: Messages = {
 	historyTitle: 'Historique des versions — ↑↓ choisir · Entrée pour continuer depuis cette version · Échap annuler',
 	inUse: ' (en cours)',
 	editTitle: 'Modifier — Entrée pour enregistrer, Échap pour annuler',
+	ide: {
+		waiting: name => `Modification dans ${name}… enregistrez et fermez le fichier pour revenir (Échap pour annuler)`,
+		unchanged: 'Aucune modification, la version actuelle est conservée',
+	},
 	voice: {
 		hint: 'Tab : parler',
 		off: 'La saisie vocale est désactivée. Mettez "voice.enabled": true dans le fichier de config (ou PURFECT_VOICE_ENABLED=1) et ajoutez la clé du fournisseur',
@@ -239,7 +258,7 @@ const fr: Messages = {
 		title: 'Réglages — ↑↓ choisir · Entrée modifier · Échap retour',
 		pick: label => `${label} — ↑↓ choisir · Entrée enregistrer · Échap annuler`,
 		text: label => `${label} — Entrée enregistrer (vide = défaut) · Échap annuler`,
-		labels: {targetLanguage: 'Langue cible', displayLanguage: 'Langue d’affichage', backend: 'Backend', model: 'Modèle', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Instructions : réécriture', languageInstructions: 'Instructions : Language tutor', promptInstructions: 'Instructions : Prompt tutor'},
+		labels: {targetLanguage: 'Langue cible', displayLanguage: 'Langue d’affichage', backend: 'Backend', model: 'Modèle', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Instructions : réécriture', languageInstructions: 'Instructions : Language tutor', promptInstructions: 'Instructions : Prompt tutor', ide: 'Commande IDE'},
 		unset: '(défaut)',
 		on: 'activé',
 		off: 'désactivé',
@@ -254,6 +273,7 @@ const de: Messages = {
 	commands: {
 		approve: 'Diesen Prompt übernehmen und schließen (leeres Enter geht auch)',
 		edit: 'Den umgeschriebenen Prompt von Hand bearbeiten',
+		ide: 'Den umgeschriebenen Prompt in Ihrer IDE bearbeiten (VS Code, Cursor, …)',
 		improve: 'Verbesserungen vorschlagen: klarer, mit [Lücken?] zum Ausfüllen',
 		voice: 'Eine Anweisung sprechen statt tippen (Spracheingabe muss aktiv sein)',
 		history: 'Alle Versionen ansehen, eine zum Weitermachen wählen',
@@ -291,6 +311,10 @@ const de: Messages = {
 	historyTitle: 'Versionsverlauf — ↑↓ wählen · Enter: mit dieser Version weitermachen · Esc abbrechen',
 	inUse: ' (aktuell)',
 	editTitle: 'Bearbeiten — Enter zum Speichern, Esc zum Abbrechen',
+	ide: {
+		waiting: name => `Bearbeitung in ${name}… Datei speichern und schließen, um zurückzukehren (Esc zum Abbrechen)`,
+		unchanged: 'Keine Änderungen, die aktuelle Version bleibt erhalten',
+	},
 	voice: {
 		hint: 'Tab: sprechen',
 		off: 'Spracheingabe ist aus. Setzen Sie "voice.enabled": true in der Config-Datei (oder PURFECT_VOICE_ENABLED=1) und tragen Sie den Schlüssel des Anbieters ein',
@@ -304,7 +328,7 @@ const de: Messages = {
 		title: 'Einstellungen — ↑↓ wählen · Enter ändern · Esc zurück',
 		pick: label => `${label} — ↑↓ wählen · Enter speichern · Esc abbrechen`,
 		text: label => `${label} — Enter speichern (leer = Standard) · Esc abbrechen`,
-		labels: {targetLanguage: 'Zielsprache', displayLanguage: 'Anzeigesprache', backend: 'Backend', model: 'Modell', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Zusatzanweisungen: Umschreiben', languageInstructions: 'Zusatzanweisungen: Language tutor', promptInstructions: 'Zusatzanweisungen: Prompt tutor'},
+		labels: {targetLanguage: 'Zielsprache', displayLanguage: 'Anzeigesprache', backend: 'Backend', model: 'Modell', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Zusatzanweisungen: Umschreiben', languageInstructions: 'Zusatzanweisungen: Language tutor', promptInstructions: 'Zusatzanweisungen: Prompt tutor', ide: 'IDE-Befehl'},
 		unset: '(Standard)',
 		on: 'an',
 		off: 'aus',
@@ -319,6 +343,7 @@ const it: Messages = {
 	commands: {
 		approve: 'Approva questo prompt e chiudi (anche Invio vuoto)',
 		edit: 'Modifica a mano il prompt riscritto',
+		ide: 'Modifica il prompt riscritto nel tuo IDE (VS Code, Cursor, …)',
 		improve: 'Suggerisci miglioramenti: più chiaro, con [vuoti?] da riempire',
 		voice: 'Dettare un\'istruzione invece di scriverla (serve l\'input vocale attivo)',
 		history: 'Vedi tutte le versioni, scegline una da cui continuare',
@@ -356,6 +381,10 @@ const it: Messages = {
 	historyTitle: 'Cronologia versioni — ↑↓ scegli · Invio per continuare da questa versione · Esc annulla',
 	inUse: ' (in uso)',
 	editTitle: 'Modifica — Invio per salvare, Esc per annullare',
+	ide: {
+		waiting: name => `Modifica in ${name}… salva e chiudi il file per tornare (Esc per annullare)`,
+		unchanged: 'Nessuna modifica, resta la versione attuale',
+	},
 	voice: {
 		hint: 'Tab: parla',
 		off: 'L\'input vocale è disattivato. Imposta "voice.enabled": true nel file di config (o PURFECT_VOICE_ENABLED=1) e aggiungi la chiave del provider',
@@ -369,7 +398,7 @@ const it: Messages = {
 		title: 'Impostazioni — ↑↓ scegli · Invio cambia · Esc indietro',
 		pick: label => `${label} — ↑↓ scegli · Invio salva · Esc annulla`,
 		text: label => `${label} — Invio salva (vuoto = predefinito) · Esc annulla`,
-		labels: {targetLanguage: 'Lingua di destinazione', displayLanguage: 'Lingua dell’interfaccia', backend: 'Backend', model: 'Modello', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Istruzioni extra: riscrittura', languageInstructions: 'Istruzioni extra: Language tutor', promptInstructions: 'Istruzioni extra: Prompt tutor'},
+		labels: {targetLanguage: 'Lingua di destinazione', displayLanguage: 'Lingua dell’interfaccia', backend: 'Backend', model: 'Modello', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Istruzioni extra: riscrittura', languageInstructions: 'Istruzioni extra: Language tutor', promptInstructions: 'Istruzioni extra: Prompt tutor', ide: 'Comando IDE'},
 		unset: '(predefinito)',
 		on: 'attivo',
 		off: 'disattivato',
@@ -384,6 +413,7 @@ const es: Messages = {
 	commands: {
 		approve: 'Aprobar este prompt y cerrar (Enter vacío también)',
 		edit: 'Editar a mano el prompt reescrito',
+		ide: 'Editar el prompt reescrito en tu IDE (VS Code, Cursor, …)',
 		improve: 'Sugerir mejoras: más claro, con [huecos?] por rellenar',
 		voice: 'Dictar una instrucción en lugar de escribirla (requiere la entrada de voz activada)',
 		history: 'Ver todas las versiones y elegir una para continuar',
@@ -421,6 +451,10 @@ const es: Messages = {
 	historyTitle: 'Historial de versiones — ↑↓ elegir · Enter para continuar desde esta versión · Esc cancelar',
 	inUse: ' (actual)',
 	editTitle: 'Editar — Enter para guardar, Esc para cancelar',
+	ide: {
+		waiting: name => `Editando en ${name}… guarda y cierra el archivo para volver (Esc para cancelar)`,
+		unchanged: 'Sin cambios, se mantiene la versión actual',
+	},
 	voice: {
 		hint: 'Tab: hablar',
 		off: 'La entrada de voz está desactivada. Pon "voice.enabled": true en el archivo de config (o PURFECT_VOICE_ENABLED=1) y añade la clave del proveedor',
@@ -434,7 +468,7 @@ const es: Messages = {
 		title: 'Ajustes — ↑↓ elegir · Enter cambiar · Esc volver',
 		pick: label => `${label} — ↑↓ elegir · Enter guardar · Esc cancelar`,
 		text: label => `${label} — Enter guardar (vacío = predeterminado) · Esc cancelar`,
-		labels: {targetLanguage: 'Idioma de destino', displayLanguage: 'Idioma de la interfaz', backend: 'Backend', model: 'Modelo', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Instrucciones extra: reescritura', languageInstructions: 'Instrucciones extra: Language tutor', promptInstructions: 'Instrucciones extra: Prompt tutor'},
+		labels: {targetLanguage: 'Idioma de destino', displayLanguage: 'Idioma de la interfaz', backend: 'Backend', model: 'Modelo', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Instrucciones extra: reescritura', languageInstructions: 'Instrucciones extra: Language tutor', promptInstructions: 'Instrucciones extra: Prompt tutor', ide: 'Comando del IDE'},
 		unset: '(predeterminado)',
 		on: 'activado',
 		off: 'desactivado',
@@ -449,6 +483,7 @@ const pt: Messages = {
 	commands: {
 		approve: 'Aprovar este prompt e fechar (Enter vazio também)',
 		edit: 'Editar à mão o prompt reescrito',
+		ide: 'Editar o prompt reescrito na sua IDE (VS Code, Cursor, …)',
 		improve: 'Sugerir melhorias: mais claro, com [lacunas?] para preencher',
 		voice: 'Ditar uma instrução em vez de digitar (requer a entrada de voz ativada)',
 		history: 'Ver todas as versões e escolher uma para continuar',
@@ -486,6 +521,10 @@ const pt: Messages = {
 	historyTitle: 'Histórico de versões — ↑↓ escolher · Enter para continuar desta versão · Esc cancelar',
 	inUse: ' (atual)',
 	editTitle: 'Editar — Enter para salvar, Esc para cancelar',
+	ide: {
+		waiting: name => `Editando em ${name}… salve e feche o arquivo para voltar (Esc para cancelar)`,
+		unchanged: 'Sem alterações, a versão atual foi mantida',
+	},
 	voice: {
 		hint: 'Tab: falar',
 		off: 'A entrada de voz está desativada. Defina "voice.enabled": true no arquivo de config (ou PURFECT_VOICE_ENABLED=1) e adicione a chave do provedor',
@@ -499,7 +538,7 @@ const pt: Messages = {
 		title: 'Configurações — ↑↓ escolher · Enter alterar · Esc voltar',
 		pick: label => `${label} — ↑↓ escolher · Enter salvar · Esc cancelar`,
 		text: label => `${label} — Enter salvar (vazio = padrão) · Esc cancelar`,
-		labels: {targetLanguage: 'Idioma de destino', displayLanguage: 'Idioma da interface', backend: 'Backend', model: 'Modelo', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Instruções extras: reescrita', languageInstructions: 'Instruções extras: Language tutor', promptInstructions: 'Instruções extras: Prompt tutor'},
+		labels: {targetLanguage: 'Idioma de destino', displayLanguage: 'Idioma da interface', backend: 'Backend', model: 'Modelo', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: 'Instruções extras: reescrita', languageInstructions: 'Instruções extras: Language tutor', promptInstructions: 'Instruções extras: Prompt tutor', ide: 'Comando da IDE'},
 		unset: '(padrão)',
 		on: 'ativado',
 		off: 'desativado',
@@ -514,6 +553,7 @@ const ja: Messages = {
 	commands: {
 		approve: 'このプロンプトを承認して閉じる（空のEnterでも可）',
 		edit: '書き換え後のプロンプトを手で編集',
+		ide: '書き換えたプロンプトを IDE で編集（VS Code、Cursor など）',
 		improve: '改善案を提案：より明確に、足りない所は[空欄?]にして記入を促す',
 		voice: '入力の代わりに声で指示する（音声入力を有効にする必要があります）',
 		history: 'すべてのバージョンを見て、続けるものを選ぶ',
@@ -551,6 +591,10 @@ const ja: Messages = {
 	historyTitle: 'バージョン履歴 — ↑↓ 選択 · Enter でこの版から続ける · Esc 中止',
 	inUse: '（使用中）',
 	editTitle: '編集 — Enterで保存、Escで中止',
+	ide: {
+		waiting: name => `${name} で編集中… ファイルを保存して閉じると戻ります（Esc でキャンセル）`,
+		unchanged: '変更はありませんでした。現在のバージョンを保持します',
+	},
 	voice: {
 		hint: 'Tab: 話す',
 		off: '音声入力はオフです。設定ファイルで "voice.enabled": true にし（または PURFECT_VOICE_ENABLED=1）、プロバイダーのキーを追加してください',
@@ -564,7 +608,7 @@ const ja: Messages = {
 		title: '設定 — ↑↓ 選択 · Enter 変更 · Esc 戻る',
 		pick: label => `${label} — ↑↓ 選択 · Enter 保存 · Esc 中止`,
 		text: label => `${label} — Enter 保存（空 = 既定）· Esc 中止`,
-		labels: {targetLanguage: '対象言語', displayLanguage: '表示言語', backend: 'バックエンド', model: 'モデル', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: '追加指示：書き換え', languageInstructions: '追加指示：Language tutor', promptInstructions: '追加指示：Prompt tutor'},
+		labels: {targetLanguage: '対象言語', displayLanguage: '表示言語', backend: 'バックエンド', model: 'モデル', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: '追加指示：書き換え', languageInstructions: '追加指示：Language tutor', promptInstructions: '追加指示：Prompt tutor', ide: 'IDE コマンド'},
 		unset: '（既定）',
 		on: 'オン',
 		off: 'オフ',
@@ -579,6 +623,7 @@ const zh: Messages = {
 	commands: {
 		approve: '批准此提示词并关闭（空回车也可以）',
 		edit: '手动编辑改写后的提示词',
+		ide: '在 IDE 中编辑改写后的提示词（VS Code、Cursor 等）',
 		improve: '建议改进：更清晰，缺失处用 [空白?] 留给你填写',
 		voice: '用语音下达指令，代替打字（需开启语音输入）',
 		history: '查看所有版本，选择一个继续',
@@ -616,6 +661,10 @@ const zh: Messages = {
 	historyTitle: '版本历史 — ↑↓ 选择 · 回车从此版本继续 · Esc 取消',
 	inUse: '（当前）',
 	editTitle: '编辑 — 回车保存，Esc 取消',
+	ide: {
+		waiting: name => `正在 ${name} 中编辑… 保存并关闭文件即可返回（Esc 取消）`,
+		unchanged: '没有改动，保留当前版本',
+	},
 	voice: {
 		hint: 'Tab：说话',
 		off: '语音输入未开启。请在配置文件中设置 "voice.enabled": true（或 PURFECT_VOICE_ENABLED=1）并添加服务商密钥',
@@ -629,7 +678,7 @@ const zh: Messages = {
 		title: '设置 — ↑↓ 选择 · 回车修改 · Esc 返回',
 		pick: label => `${label} — ↑↓ 选择 · 回车保存 · Esc 取消`,
 		text: label => `${label} — 回车保存（留空 = 默认）· Esc 取消`,
-		labels: {targetLanguage: '目标语言', displayLanguage: '界面语言', backend: '后端', model: '模型', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: '附加指令：改写', languageInstructions: '附加指令：Language tutor', promptInstructions: '附加指令：Prompt tutor'},
+		labels: {targetLanguage: '目标语言', displayLanguage: '界面语言', backend: '后端', model: '模型', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: '附加指令：改写', languageInstructions: '附加指令：Language tutor', promptInstructions: '附加指令：Prompt tutor', ide: 'IDE 命令'},
 		unset: '（默认）',
 		on: '开',
 		off: '关',
@@ -644,6 +693,7 @@ const ko: Messages = {
 	commands: {
 		approve: '이 프롬프트를 승인하고 닫기 (빈 Enter도 동일)',
 		edit: '다시 쓴 프롬프트를 직접 편집',
+		ide: '다시 쓴 프롬프트를 IDE에서 편집 (VS Code, Cursor 등)',
 		improve: '개선 제안: 더 명확하게, 빠진 부분은 [빈칸?]으로 남김',
 		voice: '입력하는 대신 말로 지시하기 (음성 입력을 켜야 함)',
 		history: '모든 버전을 보고 이어서 작업할 버전 선택',
@@ -681,6 +731,10 @@ const ko: Messages = {
 	historyTitle: '버전 기록 — ↑↓ 선택 · Enter로 이 버전에서 계속 · Esc 취소',
 	inUse: ' (사용 중)',
 	editTitle: '편집 — Enter로 저장, Esc로 취소',
+	ide: {
+		waiting: name => `${name}에서 편집 중… 파일을 저장하고 닫으면 돌아옵니다 (Esc로 취소)`,
+		unchanged: '변경 사항이 없어 현재 버전을 유지합니다',
+	},
 	voice: {
 		hint: 'Tab: 말하기',
 		off: '음성 입력이 꺼져 있습니다. 설정 파일에서 "voice.enabled": true로 설정하고(또는 PURFECT_VOICE_ENABLED=1) 제공업체 키를 추가하세요',
@@ -694,7 +748,7 @@ const ko: Messages = {
 		title: '설정 — ↑↓ 선택 · Enter 변경 · Esc 뒤로',
 		pick: label => `${label} — ↑↓ 선택 · Enter 저장 · Esc 취소`,
 		text: label => `${label} — Enter 저장 (비움 = 기본값) · Esc 취소`,
-		labels: {targetLanguage: '대상 언어', displayLanguage: '표시 언어', backend: '백엔드', model: '모델', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: '추가 지시: 다시 쓰기', languageInstructions: '추가 지시: Language tutor', promptInstructions: '추가 지시: Prompt tutor'},
+		labels: {targetLanguage: '대상 언어', displayLanguage: '표시 언어', backend: '백엔드', model: '모델', effort: 'Effort', languageTutor: 'Language tutor', promptTutor: 'Prompt tutor', rewriteInstructions: '추가 지시: 다시 쓰기', languageInstructions: '추가 지시: Language tutor', promptInstructions: '추가 지시: Prompt tutor', ide: 'IDE 명령'},
 		unset: '(기본값)',
 		on: '켜짐',
 		off: '꺼짐',

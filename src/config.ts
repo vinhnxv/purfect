@@ -58,6 +58,7 @@ export const ENV_NAMES = {
 	rewriteInstructions: 'PURFECT_REWRITE_INSTRUCTIONS',
 	languageInstructions: 'PURFECT_LANGUAGE_INSTRUCTIONS',
 	promptInstructions: 'PURFECT_PROMPT_INSTRUCTIONS',
+	ide: 'PURFECT_IDE',
 } as const;
 export type SettingKey = keyof typeof ENV_NAMES;
 
@@ -69,6 +70,7 @@ const FILE_PATHS = {
 	languageInstructions: ['tutors', 'language', 'instructions'],
 	promptInstructions: ['tutors', 'prompt', 'instructions'],
 	rewriteInstructions: ['rewrite', 'instructions'],
+	ide: ['ide'],
 } as const;
 type TutorKey = keyof typeof FILE_PATHS;
 
@@ -85,6 +87,8 @@ export type Config = {
 	rewriteInstructions?: string;
 	languageInstructions?: string;
 	promptInstructions?: string;
+	// Command that opens a file in the user's IDE and waits until it is closed (the /ide command).
+	ide?: string;
 	model?: string;
 	effort?: string;
 	baseUrl?: string;
@@ -102,6 +106,7 @@ type ConfigFile = {
 	rewriteInstructions?: string;
 	languageInstructions?: string;
 	promptInstructions?: string;
+	ide?: string;
 } & Partial<Record<Backend, BackendSettings>>;
 
 const DEFAULT_BACKEND: Backend = 'claude';
@@ -133,6 +138,7 @@ export function loadConfig(chosenBackend?: Backend): Config {
 		rewriteInstructions: process.env[ENV_NAMES.rewriteInstructions] || file.rewriteInstructions,
 		languageInstructions: process.env[ENV_NAMES.languageInstructions] || file.languageInstructions,
 		promptInstructions: process.env[ENV_NAMES.promptInstructions] || file.promptInstructions,
+		ide: process.env[ENV_NAMES.ide] || file.ide,
 		model: process.env[ENV_NAMES.model] || settings.model || DEFAULT_MODELS[backend],
 		effort,
 		...(backend === 'openai' && {
@@ -226,6 +232,10 @@ function readConfigFile(): ConfigFile {
 		displayLanguage: parseLanguage(data.displayLanguage, `"displayLanguage" in ${CONFIG_PATH}`, DISPLAY_CODES) as DisplayCode | undefined,
 	};
 	readTutors(data, result);
+	if (data.ide !== undefined) {
+		if (typeof data.ide !== 'string') throw new Error(`"ide" in ${CONFIG_PATH} must be a string`);
+		result.ide = data.ide || undefined;
+	}
 	for (const backend of BACKENDS) {
 		const section = data[backend];
 		if (section === undefined) continue;

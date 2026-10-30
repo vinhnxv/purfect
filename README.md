@@ -81,6 +81,7 @@ Optional file `~/.config/purfect/config.json` (or `$XDG_CONFIG_HOME/purfect/conf
 | `backend`                | `PURFECT_BACKEND`  | the CLI that launched purfect, else `claude` |
 | `<backend>.model`        | `PURFECT_MODEL`    | `haiku` for claude, `gpt-6-luna` for codex and openai |
 | `<backend>.effort`       | `PURFECT_EFFORT`   | the backend's default                      |
+| `ide`                    | `PURFECT_IDE`      | the first of `code`, `cursor`, `windsurf`, `zed`, `subl` on the PATH, run with `--wait` |
 | `openai.baseUrl`         | `PURFECT_BASE_URL` | `https://api.openai.com/v1`                |
 | `openai.apiKey`          | `PURFECT_API_KEY`  | `OPENAI_API_KEY`                           |
 
@@ -218,6 +219,7 @@ The chat box under the result is always on:
 | ---------- | ----------------------------------------------------- |
 | `/approve` | Approve this prompt and close                         |
 | `/edit`    | Edit the rewritten prompt by hand                     |
+| `/ide`     | Edit the rewritten prompt in your IDE (VS Code, Cursor, …) |
 | `/improve` | Make the prompt clearer; gaps become `[...?]` to fill |
 | `/voice`   | Speak an instruction instead of typing it (needs voice on) |
 | `/history` | List every version, pick one to continue from         |
@@ -227,6 +229,12 @@ The chat box under the result is always on:
 | `/tutor`   | Switch both tutors on or off (saved)                  |
 | `/config`  | Change languages, tutors, instructions, backend, model, effort (saved) |
 | `/quit`    | Quit without changing anything                        |
+
+`/ide` opens the prompt in your IDE as a temporary `prompt.md`. Save and close the file there
+and the text comes back as a new version; `Esc` in purfect stops waiting. The IDE command must
+block until the file is closed, which is what `--wait` does. To use another one, set `ide` (or
+`PURFECT_IDE`) to the full command, e.g. `"code --wait"` or `"\"/path/My IDE\" --wait"`. `$EDITOR`
+is not used, because purfect is often `$EDITOR` itself. Only VS Code has been tested.
 
 Versions are append-only: every rewrite, refinement and manual edit adds one, and nothing is
 deleted. Picking an old version in `/history` only moves the pointer, so refining from it adds
