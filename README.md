@@ -16,9 +16,10 @@ Rewriting runs through headless Claude Code (`claude -p`) or Codex (`codex exec`
 your existing login; no API key needed. It can also call any OpenAI-compatible API (OpenAI,
 OpenRouter, Ollama, LM Studio, …). Requires Node 22+.
 
-> **Platform support:** purfect has only been tested on macOS. It may work on Linux and Windows,
-> but neither has been tested. Detecting which CLI launched purfect relies on `ps`, so on
-> Windows set `backend` (or `PURFECT_BACKEND`) explicitly.
+> **Platform support:** tested on macOS, Linux and Windows 11. Detecting which CLI launched
+> purfect relies on `ps`, so on Windows it falls back to `claude`; set `backend` (or
+> `PURFECT_BACKEND`) to use another. Voice input and reading aloud need `ffmpeg`; see the
+> [ffmpeg setup](#ffmpeg) below.
 
 ## Usage
 
@@ -43,6 +44,12 @@ Press `Ctrl+G` in the composer.
 Set `EDITOR` to `bin/purfect.js` (e.g. in a project's `.claude/settings.json` `env`), type a
 draft in the prompt box, press `Ctrl+G` (or `Ctrl+X Ctrl+E` in terminals such as Warp that
 take `Ctrl+G`), approve with `a`, then press Enter to send.
+
+On Windows, `EDITOR` can name the interpreter and the script, e.g. in `~/.claude/settings.json`:
+
+```json
+{ "env": { "EDITOR": "node D:/path/to/purfect/bin/purfect.js" } }
+```
 
 ### In Warp
 
@@ -172,8 +179,9 @@ its own `PURFECT_VOICE_*` variables, its own key and endpoint. Nothing is shared
 | `voice.providers.<id>.model`   | `PURFECT_VOICE_<ID>_MODEL`      | the provider's own            |
 | `voice.providers.<id>.language` | `PURFECT_VOICE_<ID>_LANGUAGE`  | the provider's own (`speechmatics` and `azure` need one) |
 
-Requirements: `ffmpeg` on the PATH (macOS: `brew install ffmpeg`), and permission for your
-terminal app to use the microphone (macOS: System Settings → Privacy & Security → Microphone).
+Requirements: `ffmpeg` on the PATH (see [ffmpeg](#ffmpeg)), and permission for your
+terminal app to use the microphone (macOS: System Settings → Privacy & Security → Microphone;
+Windows: Settings → Privacy & security → Microphone).
 The audio is sent to the provider, so voice stays off until you turn it on.
 
 Providers:
@@ -199,7 +207,25 @@ Providers:
   both recognised with no setting); `voice.providers.soniox.language` is only an optional hint.
   No price is known to purfect, so no cost is shown. See [Soniox](#soniox).
 
-Only macOS has been tested.
+### ffmpeg
+
+Voice input records through `ffmpeg`, and reading aloud plays through `ffplay`, which ships with it.
+Install it so both are on the PATH, then open a new terminal and check with `ffmpeg -version`:
+
+- macOS: `brew install ffmpeg`
+- Windows: `winget install Gyan.FFmpeg` (or `choco install ffmpeg`)
+- Linux: your package manager, e.g. `sudo apt install ffmpeg`
+
+macOS and Linux record from the system default microphone. Windows uses DirectShow, which needs
+the microphone's name: list the devices, then set `voice.device` (or `PURFECT_VOICE_DEVICE`).
+
+```sh
+ffmpeg -list_devices true -f dshow -i dummy
+```
+
+```json
+{ "voice": { "device": "Microphone (Realtek Audio)" } }
+```
 
 ### Adding a provider
 
@@ -243,8 +269,8 @@ own, even for the same OpenAI account. The prompt text is sent to the provider.
 | `speech.providers.<id>.model`   | `PURFECT_SPEECH_<ID>_MODEL`      | the provider's own     |
 | `speech.providers.<id>.voice`   | `PURFECT_SPEECH_<ID>_VOICE`      | the provider's own     |
 
-Requirements: `ffplay`, which comes with `ffmpeg` (macOS: `brew install ffmpeg`). The audio plays
-as it arrives, so it starts before the whole clip is ready. Only macOS has been tested.
+Requirements: `ffplay`, which comes with `ffmpeg` (see [ffmpeg](#ffmpeg)). The audio plays
+as it arrives, so it starts before the whole clip is ready.
 
 Providers (each has its own settings block, so each needs its own key; the id in the env var
 is upper-cased with `-` as `_`, e.g. `PURFECT_SPEECH_OPENAI_REALTIME_API_KEY`):
