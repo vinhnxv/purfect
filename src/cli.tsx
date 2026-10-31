@@ -585,7 +585,8 @@ function UsageLine({usage}: {usage: Usage}) {
 // so "\n" no longer returns the cursor to column 0. Restore output processing for our
 // run and put the host's exact settings back afterwards.
 function fixTerminalOutput(): () => void {
-	if (!process.stdout.isTTY) return () => {};
+	// Windows has no /dev/tty or stty, and its console does not leave output processing off.
+	if (!process.stdout.isTTY || process.platform === 'win32') return () => {};
 	const stty = (...args: string[]) => {
 		const tty = openSync('/dev/tty', 'r');
 		try {
