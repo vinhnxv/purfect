@@ -1,7 +1,7 @@
 import {spawnSync} from 'node:child_process';
 import {closeSync, openSync, readFileSync, writeFileSync} from 'node:fs';
 import {useEffect, useState} from 'react';
-import {Box, Text, render, useApp, useInput} from 'ink';
+import {Box, Text, render, useApp, useInput, useWindowSize} from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
 import {IPA_LANGUAGES, languageLabel, loadConfig, saveSetting, type Config, type SettingKey} from './config.js';
@@ -16,6 +16,7 @@ import {COMMAND_NAMES, messages} from './i18n.js';
 import {ipa, rewrite, type Refine, type Rewrite, type Usage} from './rewrite.js';
 import {editInIde, resolveIde, type Ide} from './ide.js';
 import {Settings} from './settings.js';
+import {ScrollView, useScroll} from './scroll.js';
 
 type Stage = 'compose' | 'rewriting' | 'review' | 'edit' | 'ide' | 'ipa' | 'history' | 'config';
 
@@ -63,6 +64,8 @@ let approved: string | undefined;
 
 function App() {
 	const {exit} = useApp();
+	const {rows} = useWindowSize();
+	const scroll = useScroll();
 	// Session settings: /config changes them here and saves them to the config file.
 	const [cfg, setCfg] = useState(config);
 	const msgs = messages(cfg.displayLanguage);
@@ -136,6 +139,9 @@ function App() {
 		);
 		return () => controller.abort();
 	}, [stage, draft]);
+
+	// A different prompt starts at its top.
+	useEffect(() => scroll.to(0), [current, versions.length]);
 
 	// Esc stops the reading, and it never outlives the prompt it was reading.
 	useInput((_input, key) => key.escape && speaking.stop(), {isActive: speaking.phase !== 'idle'});
@@ -267,6 +273,17 @@ function App() {
 		{isActive: stage !== 'compose' && stage !== 'config' && dictation.phase === 'idle'},
 	);
 
+	// A prompt taller than the screen scrolls: arrows (the mouse wheel sends them too) and PgUp/PgDn.
+	useInput(
+		(_input, key) => {
+			if (key.upArrow && suggestions.length === 0) scroll.by(-1);
+			else if (key.downArrow && suggestions.length === 0) scroll.by(1);
+			else if (key.pageUp) scroll.by(-Math.max(1, scroll.viewport - 1));
+			else if (key.pageDown) scroll.by(Math.max(1, scroll.viewport - 1));
+		},
+		{isActive: stage === 'review' && !error && dictation.phase === 'idle'},
+	);
+
 	const runCommand = (command: string) => {
 		setNotice(undefined);
 		if (!(COMMAND_NAMES as readonly string[]).includes(command)) return setNotice(msgs.unknownCommand(command));
@@ -361,7 +378,7 @@ function App() {
 	};
 
 	return (
-		<Box flexDirection="column" gap={1}>
+		<Box flexDirection="column" gap={1} height={file ? rows : undefined}>
 			{stage === 'compose' ? (
 				<Box flexDirection="column">
 					<Text bold>{msgs.composeTitle}</Text>
@@ -372,10 +389,12 @@ function App() {
 					<VoiceStatus voice={voice} dictation={dictation} msgs={msgs} showHint />
 				</Box>
 			) : (
-				<Box flexDirection="column">
-					<Text dimColor>{msgs.draft}: {draft}</Text>
+				<Box flexDirection="column" flexShrink={0}>
+					<Text dimColor wrap="truncate-end">
+						{msgs.draft}: {draft}
+					</Text>
 					{versions.length > 1 && (
-						<Text dimColor wrap="truncate-end">
+						<Text color="cyan" wrap="truncate-end">
 							{msgs.version(current + 1, versions.length, versions[current]!.label)}
 						</Text>
 					)}
@@ -412,27 +431,13 @@ function App() {
 			{stage === 'review' && error && <Text color="red">{msgs.error(error)}</Text>}
 
 			{stage === 'review' && result && !error && (
-				<Box flexDirection="column" gap={1}>
+				<ScrollView scroll={scroll}>
 					<Box borderStyle="round" borderColor="green" paddingX={1}>
 						<Text>{result.prompt}</Text>
 					</Box>
-					{result.explanation && (
-						<Box flexDirection="column">
-							<Text bold>Language tutor</Text>
-							{result.explanation.meaning && <Text>{msgs.meaning}: {result.explanation.meaning}</Text>}
-							{result.explanation.structure && <Text>{msgs.structure}: {result.explanation.structure}</Text>}
-							{result.explanation.keywords.map(k => (
-								<Box key={k.original + k.term} flexDirection="column">
-									<Text>
-										• <Text dimColor>{k.original}</Text> → <Text color="yellow">{k.term}</Text> ({k.meaning})
-									</Text>
-									{k.why && <Text dimColor>  {k.why}</Text>}
-								</Box>
-							))}
-						</Box>
-					)}
+					{result.explanation && <LanguageTutor explanation={result.explanation} msgs={msgs} />}
 					{result.tips && (
-						<Box flexDirection="column">
+						<Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
 							<Text bold color="yellow">
 								Prompt tutor
 							</Text>
@@ -443,40 +448,46 @@ function App() {
 							)}
 						</Box>
 					)}
-				</Box>
+				{ipaText?.prompt === result?.prompt && (
+					<Box flexDirection="column" borderStyle="round" borderColor="magenta" paddingX={1}>
+						<Text bold color="magenta">
+							{msgs.ipa.title}
+						</Text>
+						<Text>{ipaText!.text}</Text>
+					</Box>
+				)}
+				</ScrollView>
 			)}
 
-			{stage === 'review' && ipaText?.prompt === result?.prompt && !error && (
-				<Box flexDirection="column">
-					<Text bold color="magenta">
-						{msgs.ipa.title}
-					</Text>
-					<Text>{ipaText!.text}</Text>
+			{stage === 'review' && result?.usage && !error && (
+				<Box flexShrink={0}>
+					<UsageLine usage={result.usage} />
 				</Box>
 			)}
-
-			{stage === 'review' && result?.usage && !error && <UsageLine usage={result.usage} />}
 
 			{stage === 'review' && speaking.phase !== 'idle' && (
+				<Box flexShrink={0}>
 				<Text>
 					<Text color="green">{speaking.phase === 'loading' ? <Spinner type="dots" /> : '▶'}</Text>{' '}
 					{speaking.phase === 'loading' ? msgs.speech.loading : msgs.speech.speaking}
 				</Text>
+				</Box>
 			)}
 
-			{(stage === 'review' || stage === 'compose') && noticeState && <Text color={noticeState.info ? 'green' : 'red'}>{noticeState.text}</Text>}
+			{(stage === 'review' || stage === 'compose') && noticeState && (
+				<Box flexShrink={0}>
+					<Text color={noticeState.info ? 'green' : 'red'}>{noticeState.text}</Text>
+				</Box>
+			)}
 
 			{stage === 'review' && (
-				<Box flexDirection="column">
-					{canUse && (
-						<Text bold color="green">
-							{msgs.approveHint}
+				<Box flexDirection="column" flexShrink={0}>
+					{canUse && scroll.overflowing && (
+						<Text color="cyan">
+							↕ {msgs.scrollHint} · {Math.round(((scroll.offset + scroll.viewport) / (scroll.max + scroll.viewport)) * 100)}%
 						</Text>
 					)}
-					<Text dimColor>
-						{canUse ? msgs.refineHint : ''}
-						{msgs.commandHint}
-					</Text>
+					<Text dimColor>{canUse ? msgs.reviewKeys : msgs.commandHint}</Text>
 					<Box>
 						<Text color="cyan">› </Text>
 						<TextInput
@@ -571,13 +582,66 @@ function VoiceStatus({voice, dictation, msgs, showHint}: {voice?: VoiceConfig; d
 
 function UsageLine({usage}: {usage: Usage}) {
 	const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+	const sep = <Text dimColor> │ </Text>;
 	return (
 		<Text dimColor>
-			{usage.model} · {k(usage.inputTokens)} in · {k(usage.outputTokens)} out
+			<Text color="cyan">{usage.model}</Text>
+			{sep}
+			{k(usage.inputTokens)}↓ {k(usage.outputTokens)}↑
 			{usage.thinkingTokens > 0 && ` (${k(usage.thinkingTokens)} thinking)`}
-			{usage.costUsd !== undefined && ` · ~$${usage.costUsd.toFixed(4)}`} ·{' '}
+			{usage.costUsd !== undefined && <>{sep}~${usage.costUsd.toFixed(4)}</>}
+			{sep}
 			{(usage.durationMs / 1000).toFixed(1)}s
 		</Text>
+	);
+}
+
+// The language tutor's notes: meaning and structure, then the keywords as an aligned table.
+function LanguageTutor({explanation, msgs}: {explanation: NonNullable<Rewrite['explanation']>; msgs: ReturnType<typeof messages>}) {
+	const width = (pick: (k: (typeof explanation.keywords)[number]) => string) => Math.max(0, ...explanation.keywords.map(k => [...pick(k)].length));
+	const original = width(k => k.original);
+	const term = width(k => k.term);
+	return (
+		<Box flexDirection="column" borderStyle="round" borderColor="blue" paddingX={1}>
+			<Text bold color="blue">
+				Language tutor
+			</Text>
+			{explanation.meaning && (
+				<Text>
+					<Text dimColor>{msgs.meaning}:</Text> {explanation.meaning}
+				</Text>
+			)}
+			{explanation.structure && (
+				<Text>
+					<Text dimColor>{msgs.structure}:</Text> {explanation.structure}
+				</Text>
+			)}
+			{explanation.keywords.length > 0 && (
+				<Box flexDirection="column" marginTop={1}>
+					{explanation.keywords.map(k => (
+						<Box key={k.original + k.term} flexDirection="column">
+							<Box>
+								<Box width={original + 1} flexShrink={0}>
+									<Text dimColor>{k.original}</Text>
+								</Box>
+								<Text dimColor>→ </Text>
+								<Box width={term + 2} flexShrink={0}>
+									<Text bold color="yellow">
+										{k.term}
+									</Text>
+								</Box>
+								<Text>{k.meaning}</Text>
+							</Box>
+							{k.why && (
+								<Box paddingLeft={original + 3}>
+									<Text dimColor>{k.why}</Text>
+								</Box>
+							)}
+						</Box>
+					))}
+				</Box>
+			)}
+		</Box>
 	);
 }
 
